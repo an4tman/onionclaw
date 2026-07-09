@@ -1,0 +1,4 @@
+# Signature-update (so-rule-update) silent-failure monitor -> writes an ES health
+# doc the OpenClaw SOC cycle reads. SO manages its own crons in /var/spool/cron,
+# not /etc/cron.d, so this survives soup/reboot.
+35 7 * * * root /usr/local/bin/so-rule-update-healthcheck.sh >> /opt/so/log/idstools/healthcheck.log 2>&1

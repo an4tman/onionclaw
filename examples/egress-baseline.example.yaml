@@ -1,0 +1,39 @@
+# egress-baseline.example.yaml — EXAMPLE elastalert rule (template)
+#
+# Alerts when a high-value host makes an outbound connection to a destination that is NOT on the
+# trusted LAN and NOT one of that host's known-good processes/destinations. Install it on the SO
+# box as a custom elastalert rule (SO Detections / elastalert). It is observe-only first: watch
+# what it fires on for a week, then widen the allow-list before you trust it.
+#
+# This is a STARTING POINT, not a finished detection. Replace every <…> with your values:
+#   <high-value-host>  the host.name of the host you are baselining (your highest-privilege host)
+#   <your-LAN-CIDR>    e.g. 10.0.0.0/24
+#   the allow-list     the exact process.name + dns.question.name pairs that are normal for it
+#
+# Requires endpoint network events (Elastic Defend `logs-endpoint.events.network`) on that host.
+
+detection_title: Host Egress Baseline Anomaly
+detection_public_id: 11111111-2222-3333-4444-555555555555   # generate your own UUID
+event.module: custom
+event.dataset: custom.alert
+event.severity: 3
+sigma_level: medium
+alert:
+  - modules.so.securityonion-es.SecurityOnionESAlerter
+
+index: .ds-logs-endpoint.events.network-*
+name: Host Egress Network Baseline Anomaly -- 11111111-2222-3333-4444-555555555555
+realert:
+  seconds: 300
+type: any
+
+filter:
+  - eql: >
+      any where (
+        host.name : "<high-value-host>"
+        and not cidrmatch(destination.ip, "<your-LAN-CIDR>", "127.0.0.0/8", "::1/128")
+        and not (
+          (process.name : "<known-process>.exe" and dns.question.name : ("<allowed-domain>", "*.<allowed-domain>"))
+          or (process.name : ("chrome.exe", "msedge.exe", "firefox.exe"))
+        )
+      )

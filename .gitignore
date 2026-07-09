@@ -1,0 +1,4 @@
+config/soc-suite.env
+*.pyc
+__pycache__/
+.venv/
