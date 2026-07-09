@@ -72,7 +72,60 @@ out of version control), **not** in `soc-suite.env`.
 
 ---
 
-## 3. API & Elasticsearch reachability
+## 3. Open SO's internal-only ports (firewall hostgroups) — REQUIRED
+
+A stock SO 2.4 install **firewalls everything it doesn't itself need**: the web
+UI / Core API (`:443`) answers only IPs you granted at install time, and
+**Elasticsearch `:9200` is internal-to-the-grid only**. Neither MCP container can
+connect until you explicitly grant the Docker/OpenClaw host access. This is the
+single most common "nothing works" cause on a fresh wiring.
+
+SO manages its iptables through **Salt**: a grant is a **hostgroup membership**,
+recorded durably in the local pillar
+(`/opt/so/saltstack/local/pillar/firewall/soc_firewall.sls`) so it survives
+`soup`, highstate, and reboots. Never hand-edit iptables — Salt will overwrite
+it. Grant with the `so-firewall` CLI on the SO manager (or in the SOC web UI:
+**Administration → Configuration → firewall**):
+
+```bash
+# On the SO manager. Prefer a /32 for the one Docker host over a whole subnet.
+sudo so-firewall includehost analyst <docker-host-ip>/32            # 443: web UI + Core API
+sudo so-firewall includehost elasticsearch_rest <docker-host-ip>/32 # 9200: Elasticsearch REST
+sudo so-firewall apply                                              # applies the salt state
+```
+
+What the suite needs, hostgroup by hostgroup:
+
+| Hostgroup | Opens | Needed by |
+|---|---|---|
+| `analyst` | `443` (SOC web + Core API) | **required** — `mcp-so-gateway` (reads + tuning writes) |
+| `elasticsearch_rest` | `9200` (Elasticsearch REST) | **required** — the `mcp-elasticsearch` read-only bridge |
+| `syslog` | `514` tcp/udp | optional — the host running `orchestration/soc-log-forwarder.py` |
+| `elastic_agent_endpoint` | agent enroll/data ports | optional — LAN hosts you enroll Elastic Agents on |
+
+For a source that ships on a **nonstandard port** (e.g. a router that can only
+syslog to a custom UDP port), create a custom pairing: `sudo so-firewall
+addhostgroup <name>` + `includehost <name> <ip>`, then define the matching
+**portgroup** and chain assignment in the SOC UI (Administration → Configuration
+→ firewall). The result lands in the same local pillar.
+
+Verify both sides after `apply`:
+
+```bash
+# on SO: the grants materialized in iptables
+sudo iptables -L INPUT -n | grep -E '9200|443'
+# from the Docker host: 401 = reachable (auth required); timeout = still blocked
+curl -sk -o /dev/null -w '%{http_code}\n' "$SOC_SO_ES_URL"
+```
+
+> The source deployment granted its whole LAN CIDR to `analyst` /
+> `elasticsearch_rest` for convenience; a per-host `/32` for the Docker host is
+> the tighter default. Grants are additive — `so-firewall removehost <ip>`
+> removes an IP from all hostgroups.
+
+---
+
+## 4. API & Elasticsearch reachability
 
 ### Core API (the gateway)
 
@@ -108,13 +161,12 @@ SO_SSL_SKIP_VERIFY=true          # SO uses a self-signed cert on :9200
 Use a **read-only** ES API key/role for this path (cluster monitor + index
 `read` / `view_index_metadata` / `monitor`).
 
-> Reachability gotcha: by default SO does not expose `:9200` to external hosts.
-> If the bridge can't connect, you may need to expose the Elasticsearch port from
-> the SO host and adjust firewall rules. **Adjust for your install.**
+> If the bridge can't connect at all (timeout, not 401), the Docker host is
+> missing from the `elasticsearch_rest` hostgroup — see §3 above.
 
 ---
 
-## 4. Index / data-stream notes
+## 5. Index / data-stream notes
 
 SO stores telemetry in **Elasticsearch data streams**, not classic time-rolled
 indices. When you query, target the **bare data-stream name** (e.g. the Suricata
@@ -125,7 +177,7 @@ worked query recipes, see the **`soc-analyst` skill's `elastic-queries` referenc
 
 ---
 
-## 5. Optional SO-host helpers (`security-onion/`)
+## 6. Optional SO-host helpers (`security-onion/`)
 
 The suite ships two **optional** hardening/observability helpers that live on the
 **Security Onion box itself** (a separate machine from the Docker/OpenClaw host),
@@ -172,7 +224,7 @@ sudo /usr/local/bin/so-rule-update-healthcheck.sh   # seed the doc
 
 ---
 
-## 6. Storage resilience note (optional)
+## 7. Storage resilience note (optional)
 
 SO's Elasticsearch indices — especially **elastalert error/status** indices — can
 balloon when rules misbehave (e.g. a broken Sigma rule writing constant validation

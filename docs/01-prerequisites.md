@@ -41,10 +41,12 @@ The suite reads from and (operator-gated) writes to an existing **Security Onion
       standalone box, or a manager+sensor grid — anything that is **reachable
       over the network** from your Docker host (item 2). Install it per the
       official docs: <https://docs.securityonion.net>.
-- [ ] **Elasticsearch** reachable (typically port `9200`). By default SO does not
-      expose ES outside the box; you may need to expose it / open the firewall so
-      the read-only ES MCP bridge can connect. Set `SOC_SO_ES_URL` to this
-      endpoint. Self-signed TLS is expected (the bridge skips verification).
+- [ ] **Elasticsearch** reachable (typically port `9200`). A stock SO install
+      keeps ES **internal to the grid** — you must grant the Docker host access
+      via SO's firewall hostgroups (`so-firewall includehost elasticsearch_rest
+      …`; the full recipe is [02-security-onion-setup §3](./02-security-onion-setup.md)).
+      Set `SOC_SO_ES_URL` to this endpoint. Self-signed TLS is expected (the
+      bridge skips verification).
 - [ ] The **SO Core API** reachable over HTTPS (`SOC_SO_URL`). SO's nginx checks
       the `Host` header, so the gateway must address SO by the **name SO
       expects** — set `SOC_SO_HOSTNAME` and `SOC_SO_IP` so the gateway container

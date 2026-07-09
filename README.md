@@ -72,7 +72,8 @@ $EDITOR config/soc-suite.env        # fill in your network, SO, OpenClaw, and Di
 
 1. **[Prerequisites](docs/01-prerequisites.md)** — what you need (SO, Docker, OpenClaw, a Claude
    subscription, Discord, optional TI keys).
-2. **[Security Onion setup](docs/02-security-onion-setup.md)** — service account, API/ES access, the
+2. **[Security Onion setup](docs/02-security-onion-setup.md)** — service account, opening SO's
+   internal-only ports (firewall hostgroups), API/ES access, the
    optional SO-host helpers.
 3. **[MCP deployment](docs/03-mcp-deployment.md)** — the read-only Elastic bridge + this gateway.
 4. **[OpenClaw setup](docs/04-openclaw-setup.md)** — agent, Discord bind, MCP wiring, cron,
