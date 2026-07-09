@@ -1,0 +1,24 @@
+[project]
+name = "mcp-operator-gate"
+version = "0.1.0"
+description = "Reaction-based human-in-the-loop gate (ask_operator + tuning-approval watcher) for the OnionClaw SOC suite"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["operator_gate"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
