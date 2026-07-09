@@ -46,7 +46,7 @@ def _int(name: str, default: int) -> int:
 # A polite User-Agent for the keyless feeds (DShield asks for contact info).
 # Set TI_USER_AGENT in ti.env to include a real contact for your deployment.
 USER_AGENT = os.environ.get(
-    "TI_USER_AGENT", "soc-agent-suite-ti-enrichment/1.0 (set TI_USER_AGENT)"
+    "TI_USER_AGENT", "onionclaw-ti-enrichment/1.0 (set TI_USER_AGENT)"
 )
 
 CACHE_DB = os.environ.get("TI_CACHE_DB", "/data/ti-cache.sqlite")

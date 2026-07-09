@@ -1,6 +1,6 @@
 # Architecture
 
-`soc-agent-suite` is an **autonomous SOC analyst** layered over a [Security Onion](https://securityonion.net)
+`onionclaw` is an **autonomous SOC analyst** layered over a [Security Onion](https://securityonion.net)
 deployment. It triages alerts read-only, reports honestly to chat, proposes narrow tuning changes
 behind an operator approval gate, enriches indicators with threat intel, and can escalate to a
 read-only incident-response (IR) agent-team — all driven by a Claude subscription from inside an

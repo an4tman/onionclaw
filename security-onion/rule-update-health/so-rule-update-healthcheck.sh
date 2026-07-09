@@ -9,7 +9,7 @@
 # reports signature-update freshness to Discord.
 #
 # No new secrets: uses SO's own ES curl.config. Installed 2026-06-13.
-# Ships with soc-agent-suite: security-onion/rule-update-health/.
+# Ships with onionclaw: security-onion/rule-update-health/.
 set -uo pipefail
 
 LOG=/opt/so/log/idstools/download_cron.log

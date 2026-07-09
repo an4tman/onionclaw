@@ -1,6 +1,6 @@
 # 01 — Prerequisites
 
-`soc-agent-suite` installs an **autonomous SOC analyst** on top of a Security
+`onionclaw` installs an **autonomous SOC analyst** on top of a Security
 Onion deployment. The agent triages alerts, reports honestly, proposes
 (operator-gated) Security Onion tunings, enriches with threat intel, can escalate
 to a read-only IR agent-team, and delivers to Discord.

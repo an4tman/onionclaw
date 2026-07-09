@@ -60,7 +60,7 @@ command line.
 
 ## 3. `mcp-so-gateway` (this suite)
 
-The gateway lives at `soc-agent-suite/mcp-so-gateway/`. It is a Python 3.12 +
+The gateway lives at `onionclaw/mcp-so-gateway/`. It is a Python 3.12 +
 FastMCP server that bridges agents to the **Security Onion Core API**: read
 tools, human-gated reversible tuning writes, and threat-intel enrichment.
 
@@ -69,7 +69,7 @@ tools, human-gated reversible tuning writes, and threat-intel enrichment.
 From the gateway directory:
 
 ```bash
-cd soc-agent-suite/mcp-so-gateway
+cd onionclaw/mcp-so-gateway
 docker build -t mcp-so-gateway:latest .
 ```
 
@@ -131,7 +131,7 @@ and audit DB from defaults or the run command):
 ### 3.4 Run the container
 
 ```bash
-# from soc-agent-suite/mcp-so-gateway/, with config sourced:
+# from onionclaw/mcp-so-gateway/, with config sourced:
 . ../config/soc-suite.env
 
 docker run -d --name mcp-so-gateway --restart unless-stopped \
@@ -222,7 +222,7 @@ Gateway endpoint reachable:
 curl http://$SOC_DOCKER_HOST:$SOC_SO_GATEWAY_PORT/mcp   # MCP endpoint responds
 ```
 
-Smoke-test the gateway code (from `soc-agent-suite/mcp-so-gateway/`):
+Smoke-test the gateway code (from `onionclaw/mcp-so-gateway/`):
 
 ```bash
 uv run pytest      # installs dev deps + runs the test suite

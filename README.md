@@ -1,6 +1,6 @@
-# soc-agent-suite
+# OnionClaw
 
-An **autonomous SOC analyst** for a [Security Onion](https://securityonion.net) home/lab
+**Security Onion × OpenClaw** — an **autonomous SOC analyst** for a [Security Onion](https://securityonion.net) home/lab
 deployment. It triages your alerts read-only on a schedule, posts an honest, bounded-assurance
 briefing to chat, proposes *narrow* tuning changes behind an operator approval gate, enriches
 indicators with threat intel, and can escalate to a read-only incident-response agent-team — all
@@ -45,7 +45,7 @@ Full diagram and the load-bearing runtime decisions: **[docs/00-architecture.md]
 ## Repository layout
 
 ```
-soc-agent-suite/
+onionclaw/
 ├── config/soc-suite.env.example     # the ONE place every site-specific value lives
 ├── docs/                            # 00-architecture … 10-security-model
 ├── mcp-so-gateway/                  # the SO Core API gateway (source + tests + Dockerfile)
