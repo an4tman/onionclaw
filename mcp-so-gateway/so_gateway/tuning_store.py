@@ -13,8 +13,9 @@ the SO write + the store record together.
 
 import json
 import sqlite3
-import uuid
 from datetime import datetime, timezone
+
+from so_gateway import wordtoken
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS tunings (
@@ -60,7 +61,14 @@ class TuningStore:
         review_horizon_days: int | None,
     ) -> str:
         """Persist an applied tuning and return its undo *handle*."""
-        handle = uuid.uuid4().hex
+        # Word-pair handle ('lucid-heron'): typed back by a human as
+        # `revert <handle>`, so it gets the same friendliness as tokens.
+        # Unique against every handle ever issued by this store.
+        existing = {
+            row["handle"]
+            for row in self._conn.execute("SELECT handle FROM tunings")
+        }
+        handle = wordtoken.new_token(taken=existing)
         self._conn.execute(
             "INSERT INTO tunings (handle, public_id, detection_id, override_type, "
             "applied_override, prior_state, rationale, review_horizon_days, status, "

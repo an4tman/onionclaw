@@ -5,28 +5,35 @@ happens in your Discord SOC channel (`SOC_DISCORD_CHANNEL`); the `soc` agent han
 
 ## Discord command syntax
 
-| You type | What happens |
+| You do | What happens |
 |---|---|
+| React **✅** (or 👍) on a proposal message | Approve that proposal — the slick path. The `soc` agent applies the one token in that message. React **❌** (or 🚫) to dismiss it. |
 | `approve <token>` | Apply a tuning the cycle proposed. The `soc` agent calls `apply_tuning(token)` — the single SO write. Audited + reversible. |
+| `approve` (bare) | With exactly one proposal pending, approves it; otherwise the agent lists what's pending and asks which. |
 | `revert <handle>` | Undo a previously-applied tuning. The agent calls `revert_tuning(handle)` and restores the captured prior state. |
 | `list tunings` | List currently-applied tunings and their undo handles. |
 | `investigate <id>` | Launch the read-only IR team on an escalation candidate (GATE 1). Posts a converged incident record. |
 | `dismiss <id>` | Decline an escalation candidate — no investigation. |
 
 Notes:
+- **Tokens and handles are short word pairs** (e.g. `amber-fox`) — easy to retype on a phone, and
+  matching is case- and separator-tolerant (`Approve Amber Fox` works). They are workflow bindings,
+  not secrets (see [10-security-model](10-security-model.md)).
 - **Tokens are single-use and in-memory.** A proposed-tuning token lapses if the gateway restarts;
-  re-run a cycle (or re-propose) for a fresh one. Use the token from the latest briefing.
+  re-run a cycle (or re-propose) for a fresh one. `list_pending_proposals` (ask the agent: "list
+  pending") shows what's still open.
 - `disable`/`modify` proposals are **double-gated** — the agent asks for a second confirm before
   applying, because they're broader than a `suppress`.
-- The briefing always carries the literal `approve <token>` line so the syntax is unambiguous.
+- Reaction approval works because each proposal is **its own message** and Discord reaction
+  notifications (mode `"own"`, the default) surface reactions on the bot's messages to the agent.
 
 ## Reading a briefing
 
-Each cycle posts one message: a severity dot (🔴 ESCALATE / 🟠 ATTENTION / 🟢 NOMINAL), the
-**bounded-assurance bottom line** (what was detected vs. what the telemetry could see), an
+Each cycle posts one briefing message: a severity dot (🔴 ESCALATE / 🟠 ATTENTION / 🟢 NOMINAL),
+the **bounded-assurance bottom line** (what was detected vs. what the telemetry could see), an
 **Interesting** insight, a verdict tally, one line per report section, the escalation arrows (`→`),
-and any **tuning proposals** (verbatim, with tokens). The full report `.md` is attached — open it
-for the evidence, queries, and per-group reasoning.
+and a count of tuning proposals. Each **proposal follows as its own message** (react ✅ to approve).
+The full report `.md` is attached — open it for the evidence, queries, and per-group reasoning.
 
 > Read the bottom line as bounded assurance, never "all clear." A 🟢 NOMINAL means nothing cleared
 > the escalation bar *in available telemetry, bounded by the named blind spots* — not that the

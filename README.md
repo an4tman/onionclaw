@@ -46,6 +46,7 @@ Full diagram and the load-bearing runtime decisions: **[docs/00-architecture.md]
 
 ```
 onionclaw/
+├── bin/install.sh                   # preflight + gateway deploy + orchestration install
 ├── config/soc-suite.env.example     # the ONE place every site-specific value lives
 ├── docs/                            # 00-architecture … 10-security-model
 ├── mcp-so-gateway/                  # the SO Core API gateway (source + tests + Dockerfile)
@@ -68,7 +69,15 @@ Configure once, then follow the docs in order:
 ```bash
 cp config/soc-suite.env.example config/soc-suite.env
 $EDITOR config/soc-suite.env        # fill in your network, SO, OpenClaw, and Discord values
+
+bin/install.sh preflight            # verify reachability + prerequisites (read-only)
+bin/install.sh all                  # scaffold credential files, build + run the MCP
+                                    # containers, install the orchestration tree
 ```
+
+`bin/install.sh` automates the scriptable parts of docs 03/05 (it is idempotent —
+re-run it after fixing anything). Credentials, the SO-side setup (docs/02), the
+OpenClaw agent/bind/cron (docs/04), and the skill install (docs/08) stay manual.
 
 1. **[Prerequisites](docs/01-prerequisites.md)** — what you need (SO, Docker, OpenClaw, a Claude
    subscription, Discord, optional TI keys).

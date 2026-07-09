@@ -27,9 +27,7 @@ a place to sit. ``disable``/``modify`` are flagged ``double_gated`` so the
 workflow can demand a louder/second confirm.
 """
 
-import uuid
-
-from so_gateway import tuning
+from so_gateway import tuning, wordtoken
 from so_gateway.so_client import SoClient
 from so_gateway.tuning_store import TuningStore
 
@@ -86,7 +84,12 @@ class TuningService:
 
         blast_radius = self._estimate_blast_radius(public_id, override)
 
-        token = uuid.uuid4().hex
+        # Word-pair token ('amber-fox'): easy to read/type; see wordtoken.py
+        # for why short is safe. Unique across pending/in-flight/consumed so a
+        # fresh token can never collide with one that still means something.
+        token = wordtoken.new_token(
+            taken=self._pending.keys() | self._in_flight | self._consumed
+        )
         self._pending[token] = {
             "public_id": public_id,
             "detection_id": detection.get("id"),
@@ -133,6 +136,7 @@ class TuningService:
 
     def apply_tuning(self, token: str) -> dict:
         """Consume *token*, PUT the change, record the undo. Single-use."""
+        token = wordtoken.normalize(token)
         if token in self._consumed:
             raise TokenAlreadyUsedError(
                 "this proposal token was already applied (tokens are single-use)"
@@ -186,6 +190,7 @@ class TuningService:
 
     def revert_tuning(self, handle: str) -> dict:
         """Replay the captured prior state for *handle* and mark it reverted."""
+        handle = wordtoken.normalize(handle)
         rec = self._store.get(handle)
         if rec is None:
             raise ProposalNotFoundError(f"no tuning record for handle {handle!r}")
@@ -209,6 +214,23 @@ class TuningService:
     def list_tunings(self) -> list[dict]:
         """Currently-applied tunings + undo handles (excludes reverted)."""
         return self._store.list_applied()
+
+    def list_pending(self) -> list[dict]:
+        """Proposals awaiting approval (token + a recognisable summary).
+
+        Read-only. Lets the operator-facing agent resolve a bare "approve"
+        deterministically: exactly one pending proposal -> that's the one.
+        """
+        return [
+            {
+                "token": token,
+                "public_id": p["public_id"],
+                "override_type": p["override_type"],
+                "rationale": p["rationale"],
+                "title": (p.get("new_detection") or {}).get("title"),
+            }
+            for token, p in self._pending.items()
+        ]
 
     # -- disposition -------------------------------------------------------
 

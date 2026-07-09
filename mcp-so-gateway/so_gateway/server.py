@@ -162,6 +162,16 @@ def list_tunings() -> list:
     return _get_tuning_service().list_tunings()
 
 
+def list_pending_proposals() -> list:
+    """List proposals awaiting operator approval (token + summary). Read-only.
+
+    Use this to resolve a bare "approve" (exactly one pending proposal means
+    that's the one) or to re-show outstanding proposals. Pending proposals are
+    in-memory: a gateway restart clears them (re-propose).
+    """
+    return _get_tuning_service().list_pending()
+
+
 def disposition_alerts(
     rule_uuid: str,
     date_range: str,
@@ -251,6 +261,7 @@ mcp.tool()(propose_tuning)
 mcp.tool()(apply_tuning)
 mcp.tool()(revert_tuning)
 mcp.tool()(list_tunings)
+mcp.tool()(list_pending_proposals)
 mcp.tool()(disposition_alerts)
 mcp.tool()(enrich_iocs)
 mcp.tool()(ti_provider_status)

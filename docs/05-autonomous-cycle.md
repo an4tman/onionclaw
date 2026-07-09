@@ -39,6 +39,7 @@ tuning. Applying is a separate, operator-gated step (see [09-operator-runbook](0
    ```bash
    . config/soc-suite.env
    # copy the orchestration tree + your filled soc-suite.env into the container
+   # (or just: bin/install.sh orchestration — same steps, scripted)
    docker cp orchestration/.        "$SOC_OPENCLAW_CONTAINER:$SOC_AGENT_HOME/"
    docker cp config/soc-suite.env   "$SOC_OPENCLAW_CONTAINER:$SOC_AGENT_HOME/soc-suite.env"
    docker exec "$SOC_OPENCLAW_CONTAINER" chmod +x \
@@ -88,8 +89,10 @@ runs on the reliable cloud model, never the default agent.
 `soc-cycle.sh` extracts a tight, Discord-friendly briefing from the report (best-effort, degrades to
 "see attached" if the report shape drifts): a severity-tagged headline (🔴 ESCALATE / 🟠 ATTENTION /
 🟢 NOMINAL), the bounded-assurance bottom line, an "Interesting" insight line, a verdict tally, one
-line per report section, the escalation arrows, and any **tuning proposals verbatim** (the
-load-bearing `approve <token>` lines are never trimmed). The full report `.md` is always attached.
+line per report section, the escalation arrows, and a **count of tuning proposals**. Each proposal
+is then posted as **its own follow-up message** (verbatim block + a `✅ react to approve · ❌ to
+dismiss · or reply approve <token>` hint) so an operator reaction unambiguously targets one
+proposal. The full report `.md` is always attached to the briefing.
 
 ## Tuning the cadence & scope
 

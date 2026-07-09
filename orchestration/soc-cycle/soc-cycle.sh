@@ -20,10 +20,12 @@
 #     NOMINAL), the bounded-assurance bottom line, a verdict tally, one line per report
 #     section, and the escalation arrows. Kept well under Discord's 2000-char message limit.
 #   - The FULL report .md attached as a document via --media so nothing is lost.
-#   Why this shape (verified against the live box 2026-06-02): `openclaw message send`
-#   (build 2026.5.27) has no --embed; its --presentation payload is accepted but this
-#   build does NOT render it as a Discord embed/Components-v2 card (read-back showed
-#   components:[]). So the clean, reliable path is markdown body + attached document.
+#   Why this shape (verified 2026-06-02 on build 2026.5.27, re-verified 2026-07-09 on
+#   2026.6.5): `openclaw message send --presentation` is accepted but the buttons do NOT
+#   render on Discord (Discord API read-back shows components:[]). So the clean, reliable
+#   path is markdown body + attached document, with proposals as separate messages the
+#   operator can react to (reaction events DO reach the agent). Re-test --presentation
+#   buttons after an OpenClaw upgrade — the current docs describe working components v2.
 #   Severity is conveyed by the leading colored dot + label instead of an embed sidebar.
 # Presentation only: the analytical prompt/content is unchanged.
 #
@@ -52,7 +54,7 @@ REPORT="$REPORTS/soc-$TS.md"
 # 2. Run the bounded cycle. Read-only tool scope: elasticsearch (read-only) + the read-only
 #    so_gateway tools + propose_tuning (read-only) + local reads. WRITE so_gateway tools
 #    (apply_tuning/revert_tuning/disposition_alerts) are intentionally omitted.
-SO_RO_TOOLS="mcp__so_gateway__ping mcp__so_gateway__get_detection mcp__so_gateway__get_playbook mcp__so_gateway__run_guided_analysis mcp__so_gateway__propose_tuning mcp__so_gateway__enrich_iocs mcp__so_gateway__extract_iocs mcp__so_gateway__ti_provider_status"
+SO_RO_TOOLS="mcp__so_gateway__ping mcp__so_gateway__get_detection mcp__so_gateway__get_playbook mcp__so_gateway__run_guided_analysis mcp__so_gateway__propose_tuning mcp__so_gateway__list_pending_proposals mcp__so_gateway__enrich_iocs mcp__so_gateway__extract_iocs mcp__so_gateway__ti_provider_status"
 "$CLAUDE" -p "$(cat "$PROMPT")" \
   --allowedTools "$SO_RO_TOOLS mcp__elasticsearch__* Read Grep Glob Skill" \
   > "$REPORT" 2>"$REPORTS/soc-$TS.err" || {
@@ -150,11 +152,12 @@ PROPOSALS=$(awk '
 ' "$REPORT")
 N_PROP=$(printf '%s\n' "$PROPOSALS" | grep -cE '^PROPOSAL [—-]' || true)
 
-# Proposals block for the message body (only when there are any). Kept verbatim so the
-# operator sees the exact token and the literal `approve <token>` syntax.
+# Proposals are delivered as SEPARATE follow-up messages (one per proposal, sent after the
+# briefing below) so an operator reaction targets exactly one proposal: react ✅ to approve,
+# ❌ to dismiss — or reply `approve <token>` as always. The briefing just counts them.
 if [ "${N_PROP:-0}" -gt 0 ]; then
-  PROP_SECTION=$(printf '\n**5 · Tuning proposals (%s) — operator-gated**\n%s\nTo apply one: reply `approve <token>` in this channel. Nothing is applied until you do.\n' \
-    "$N_PROP" "$PROPOSALS")
+  PROP_SECTION=$(printf '\n**5 · Tuning proposals (%s) — operator-gated**\nPosted below, one message each: react ✅ to approve (❌ to dismiss) or reply `approve <token>`. Nothing is applied until you do.\n' \
+    "$N_PROP")
 else
   PROP_SECTION=$(printf '\n**5 · Tuning proposals** — none this cycle.\n')
 fi
@@ -170,19 +173,41 @@ HEAD=$(printf '%s **SOC briefing — %s** · %s · window: %s\n\n%s\n**Interesti
   "$ESCLINES")
 FOOT=$(printf '\n*Full report attached (soc-%s.md).*' "$TS")
 
-# Discord caps a message at 2000 chars. Proposals carry the load-bearing approve token, so
-# they must NEVER be trimmed away: budget for them + the footer first, then trim only the
-# analyst-section HEAD to fit. (Full analysis is in the attachment regardless.)
+# Discord caps a message at 2000 chars. Proposals ride their own messages now, so only the
+# short count line + footer need a budget; trim only the analyst-section HEAD to fit.
 PROP_LEN=$(printf '%s%s' "$PROP_SECTION" "$FOOT" | wc -c | tr -d ' ')
 HEAD_BUDGET=$((1900 - PROP_LEN))
 [ "$HEAD_BUDGET" -lt 200 ] && HEAD_BUDGET=200
 HEAD=$(printf '%s' "$HEAD" | cut -c1-"$HEAD_BUDGET")
 BODY=$(printf '%s%s%s' "$HEAD" "$PROP_SECTION" "$FOOT")
 
-# 4. Deliver: ONE message — clean markdown briefing + the full report attached as a doc.
+# 4. Deliver: the briefing (full report attached as a doc), then ONE message PER proposal.
+#    One-proposal-per-message is what makes reaction approval unambiguous: the channel
+#    agent maps an operator's ✅ on a message to the single token that message contains.
 openclaw message send \
   --channel discord --target "$DISCORD_CHANNEL" \
   -m "$BODY" \
   --media "$REPORT"
 
-echo "Posted clean briefing to Discord channel $DISCORD_CHANNEL (severity=$SEV, report attached)."
+if [ "${N_PROP:-0}" -gt 0 ]; then
+  PROPDIR="$REPORTS/proposals-$TS"
+  mkdir -p "$PROPDIR"
+  printf '%s\n' "$PROPOSALS" | awk -v dir="$PROPDIR" '
+    /^PROPOSAL [—-]/ { n++; blank=0 }
+    n {
+      if ($0 ~ /^[[:space:]]*$/) { blank=1; next }   # a blank line ends a block
+      if (blank) next
+      print >> (dir "/prop-" n ".txt")
+    }
+  '
+  for PF in "$PROPDIR"/prop-*.txt; do
+    [ -f "$PF" ] || continue
+    PROP_MSG=$(printf '%s\n\n✅ react to approve · ❌ react to dismiss · or reply `approve <token>`' "$(cat "$PF")")
+    openclaw message send \
+      --channel discord --target "$DISCORD_CHANNEL" \
+      -m "$PROP_MSG"
+  done
+  rm -rf "$PROPDIR"
+fi
+
+echo "Posted clean briefing to Discord channel $DISCORD_CHANNEL (severity=$SEV, report attached, proposals=$N_PROP)."

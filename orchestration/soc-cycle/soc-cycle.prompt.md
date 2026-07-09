@@ -125,13 +125,14 @@ PROPOSAL — <rule name> (<publicId>)
 - Suppression: <override_type> <track> <ip> (the exact, narrow change)
 - Blast radius: <blast_radius.matched_recent_alerts> recent alerts matched (advisory)
 - Rationale: <one-line evidence>
-- Token: <single-use token returned by propose_tuning>
+- Token: <single-use word-pair token returned by propose_tuning, e.g. amber-fox>
 - To APPROVE: reply in this channel with  approve <token>
 - To reject: ignore it (nothing is applied unless you approve).
 ```
 
 Emit only a token that `propose_tuning` actually returned, and use the literal `approve <token>`
-line so the operator always sees the same syntax. If you proposed none, write a single line:
+line so the operator always sees the same syntax (the wrapper posts each proposal as its own
+message and adds the react-to-approve hint). If you proposed none, write a single line:
 `No tuning proposals this cycle.`
 
 Keep it honest, skimmable, and Discord-friendly. Output the report as Markdown to stdout — that is

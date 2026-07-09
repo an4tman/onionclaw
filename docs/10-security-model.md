@@ -26,8 +26,8 @@ the safety mechanisms, and the binding analytical tenets the agent must obey.
 | Layer | Mechanism |
 |---|---|
 | **Cycle can't write** | The daily cycle's `--allowedTools` excludes every write tool. It physically cannot apply a tuning — it can only `propose_tuning` (read-only). |
-| **Single-use tokens** | `propose_tuning` issues a one-time token + blast-radius preview. `apply_tuning` is the only write and consumes the token only on a *successful* PUT. |
-| **Operator approval** | Applying requires the operator to type `approve <token>` in Discord. `disable`/`modify` are double-gated (second confirm). |
+| **Single-use tokens** | `propose_tuning` issues a one-time token + blast-radius preview. `apply_tuning` is the only write and consumes the token only on a *successful* PUT. Tokens are short word pairs (`amber-fox`) by design: a token is a **workflow binding** (it ties the operator's approval to exactly the previewed change, once), *not* a security boundary — any client that can reach the gateway can propose for itself, so the real boundary is network reachability + the callers' tool allowlists. |
+| **Operator approval** | Applying requires the operator's own act in Discord — `approve <token>` or a ✅ reaction on the proposal message. `disable`/`modify` are double-gated (second confirm). |
 | **Audited + reversible** | Every applied write is logged (SQLite audit DB) with the exact prior state, and is reversible via `revert_tuning`. |
 | **IR team is read-only** | The IR runner's allowlist is the read verbs only — no write/tune/disposition/Bash/Write. Two human gates bracket it (`investigate` to launch; the operator applies any recommended action). |
 | **Self-improve is artifact-only** | The worker's allowlist permits repo edits + commits to its own branch, never push/merge/live-apply/SSH/docker. Live-infra items become *proposals*. Capacity-gated; stops on a 429. |

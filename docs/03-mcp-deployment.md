@@ -34,16 +34,19 @@ search / ES|QL / `get_mappings` / `list_indices` (and `get_shards`) tools, all
 marked `readOnlyHint: true`. It is the agent's path for surveying alerts and
 pivoting through telemetry.
 
-It is a **separate, standard read-only ES MCP container** and is **not** part of
-this suite's tree — you supply or build it yourself. This suite only specifies
-how it should be wired; nothing here ships a Dockerfile for it.
+It is a **separate, standard read-only ES MCP container**, not part of this
+suite's tree. Elastic's official image works and is what the source deployment
+runs (`bin/install.sh gateways` deploys it):
 
-Conceptual run shape:
+```bash
+# es.env (0600):  ES_URL=$SOC_SO_ES_URL  ES_API_KEY=<key>  ES_SSL_SKIP_VERIFY=true
+docker run -d --name mcp-elasticsearch --restart unless-stopped \
+  --env-file ./es.env \
+  -p "$SOC_ES_MCP_PORT:8080" docker.elastic.co/mcp/elasticsearch:latest
+```
 
-- Point it at `SOC_SO_ES_URL` with the SO Elasticsearch credentials (an ES API
-  key is the usual form).
-- Publish it on `SOC_ES_MCP_PORT` (9220), mapping to whatever port the bridge
-  binds internally.
+- Point it at `SOC_SO_ES_URL` with an SO Elasticsearch **API key** (read-only
+  role: cluster monitor + index read/view_index_metadata/monitor).
 - The server holds the ES key; MCP clients connect with no token.
 
 Health check:
