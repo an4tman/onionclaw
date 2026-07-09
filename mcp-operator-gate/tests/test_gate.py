@@ -17,7 +17,9 @@ class FakeRest:
         self.messages = {}          # id -> content
         self.reactions = {}         # (mid, emoji) -> set(user_ids)
         self.replies = []           # (reply_to, content) posted as replies
-        self._seq = 1000
+        # start ids at a recent snowflake so they clear the watcher's recency cutoff
+        import time as _t
+        self._seq = ((int(_t.time() * 1000) - 1420070400000) << 22)
         self.applied = []           # tokens the fake so-gateway "applied"
 
     def post_message(self, ch, content, reply_to=None):
@@ -31,11 +33,20 @@ class FakeRest:
     def edit_message(self, ch, mid, content):
         self.messages[mid] = content
 
+    def _reaction_summary(self, mid):
+        out = []
+        for (m, emoji), users in self.reactions.items():
+            if m == mid and users:
+                out.append({"emoji": {"name": emoji}, "count": len(users)})
+        return out
+
     def get_message(self, ch, mid):
-        return {"id": mid, "content": self.messages[mid], "author": {"id": BOT}}
+        return {"id": mid, "content": self.messages[mid], "author": {"id": BOT},
+                "reactions": self._reaction_summary(mid)}
 
     def list_messages(self, ch, limit=50, after=None):
-        return [{"id": mid, "content": c, "author": {"id": BOT}}
+        return [{"id": mid, "content": c, "author": {"id": BOT},
+                 "reactions": self._reaction_summary(mid)}
                 for mid, c in self.messages.items()]
 
     def add_reaction(self, ch, mid, emoji):
@@ -192,6 +203,39 @@ def test_watcher_ignores_non_proposal_and_tokenless(tmp_path):
     w = _watcher(rest, tmp_path)
     w._scan_once()
     assert w._so.calls == []
+
+
+def test_watcher_ignores_proposals_older_than_lookback(tmp_path):
+    from operator_gate.store import HandledStore
+    rest = FakeRest()
+    mid = rest.post_message("chan", PROPOSAL)
+    store = HandledStore(str(tmp_path / "h.sqlite"))
+    # lookback of 0h => everything is "too old"; even an operator ✅ is ignored
+    w = ApprovalWatcher(rest, "http://so/mcp", "chan", BOT, OPERATOR, store,
+                        lookback_hours=0)
+    w._so = FakeSo(rest)
+    rest.operator_taps(mid, "✅")
+    w._scan_once()
+    assert w._so.calls == [] and rest.replies == []
+
+
+def test_watcher_skips_peruser_lookup_without_a_reaction(tmp_path):
+    # The rate-limit fix: no reaction_users call when the summary shows only the
+    # bot's own seed (count 1). Count reaction_users invocations.
+    rest = FakeRest()
+    mid = rest.post_message("chan", PROPOSAL)
+    calls = {"n": 0}
+    orig = rest.reaction_users
+
+    def counted(ch, m, e):
+        calls["n"] += 1
+        return orig(ch, m, e)
+
+    rest.reaction_users = counted
+    w = _watcher(rest, tmp_path)
+    w._scan_once()           # seeds bot reactions (count 1 each)
+    w._scan_once()           # summary count 1 => must NOT call reaction_users
+    assert calls["n"] == 0 and w._so.calls == []
 
 
 def test_watcher_permanent_error_marks_handled_stops_retrying(tmp_path):

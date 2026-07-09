@@ -17,6 +17,7 @@ class Config:
     watch_approvals: bool
     default_timeout_seconds: int
     handled_db: str
+    lookback_hours: float
 
 
 def load_config() -> Config:
@@ -38,4 +39,5 @@ def load_config() -> Config:
         watch_approvals=os.environ.get("WATCH_APPROVALS", "true").lower() != "false",
         default_timeout_seconds=int(os.environ.get("ASK_TIMEOUT_SECONDS", "600")),
         handled_db=os.environ.get("HANDLED_DB", "/data/operator-gate.sqlite"),
+        lookback_hours=float(os.environ.get("APPROVAL_LOOKBACK_HOURS", "26")),
     )

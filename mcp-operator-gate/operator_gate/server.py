@@ -80,7 +80,8 @@ def _start_watcher() -> None:
     bot_id = _rest.me()["id"]
     store = HandledStore(_cfg.handled_db)
     watcher = ApprovalWatcher(
-        _rest, _cfg.so_gateway_url, _cfg.channel_id, bot_id, _cfg.operator_id, store
+        _rest, _cfg.so_gateway_url, _cfg.channel_id, bot_id, _cfg.operator_id, store,
+        lookback_hours=_cfg.lookback_hours,
     )
     watcher.start()
 

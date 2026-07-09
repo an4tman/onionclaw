@@ -16,8 +16,9 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import time
 
-from .discord_rest import DiscordREST
+from .discord_rest import DiscordREST, snowflake_ms
 from .so_gateway_client import SoGatewayClient, SoGatewayError
 from .store import HandledStore
 
@@ -45,6 +46,7 @@ class ApprovalWatcher(threading.Thread):
         store: HandledStore,
         *,
         poll_seconds: float = 10.0,
+        lookback_hours: float = 26.0,
     ) -> None:
         super().__init__(daemon=True, name="approval-watcher")
         self._rest = rest
@@ -54,6 +56,10 @@ class ApprovalWatcher(threading.Thread):
         self._operator = str(operator_id)
         self._store = store
         self._poll = poll_seconds
+        # Only ever act on proposals newer than this. Bounds work to the recent
+        # cycle(s) instead of every historical PROPOSAL in the channel (which
+        # would seed + poll hundreds of dead messages and hit the rate limit).
+        self._cutoff_ms = int(time.time() * 1000) - int(lookback_hours * 3600_000)
         self._seeded: set[str] = set()
         self._stop = threading.Event()
 
@@ -71,13 +77,15 @@ class ApprovalWatcher(threading.Thread):
 
     # -- one pass over recent messages ---------------------------------------
     def _scan_once(self) -> None:
-        for msg in self._rest.list_messages(self._channel, limit=40):
+        for msg in self._rest.list_messages(self._channel, limit=25):
+            mid = msg["id"]
+            if snowflake_ms(mid) < self._cutoff_ms:
+                continue  # too old — ignore historical proposals entirely
             if str(msg.get("author", {}).get("id")) != self._bot:
                 continue
             content = msg.get("content") or ""
             if not _PROPOSAL_RE.search(content):
                 continue
-            mid = msg["id"]
             if self._store.is_handled(mid):
                 continue
             m = _TOKEN_RE.search(content)
@@ -86,12 +94,16 @@ class ApprovalWatcher(threading.Thread):
             token = m.group(1)
             self._ensure_seeded(mid)
 
-            if self._operator_reacted(mid, DISMISS_EMOJI):
+            # Cheap gate: only pay for a per-user reactions lookup when the
+            # message's reaction SUMMARY shows a non-bot reaction present.
+            counts = {r.get("emoji", {}).get("name"): r.get("count", 0)
+                      for r in msg.get("reactions", [])}
+            if counts.get(DISMISS_EMOJI, 0) >= 2 and self._operator_reacted(mid, DISMISS_EMOJI):
                 self._store.mark(mid, token, "dismissed")
                 self._reply(mid, f"❌ Dismissed **{token}** — nothing applied.")
                 log.info("proposal %s dismissed by operator", token)
                 continue
-            if self._operator_reacted(mid, APPROVE_EMOJI):
+            if counts.get(APPROVE_EMOJI, 0) >= 2 and self._operator_reacted(mid, APPROVE_EMOJI):
                 self._apply(mid, token)
 
     def _ensure_seeded(self, message_id: str) -> None:

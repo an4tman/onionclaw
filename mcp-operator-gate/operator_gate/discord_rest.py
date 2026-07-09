@@ -16,6 +16,12 @@ import urllib.parse
 import httpx
 
 API = "https://discord.com/api/v10"
+DISCORD_EPOCH_MS = 1420070400000
+
+
+def snowflake_ms(message_id: str) -> int:
+    """Creation time (ms since Unix epoch) encoded in a Discord snowflake id."""
+    return (int(message_id) >> 22) + DISCORD_EPOCH_MS
 
 
 class DiscordREST:
