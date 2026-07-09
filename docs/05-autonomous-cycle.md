@@ -84,6 +84,26 @@ runs on the reliable cloud model, never the default agent.
 > user-registered cron job during a migration. After an OpenClaw update, confirm the SOC cycle job
 > is still present and scheduled.
 
+### Alternative: schedule on the HOST (recommended when the wrapper misbehaves)
+
+The OpenClaw cron job is an **agentTurn**: a model turn that execs the wrapper. Two verified
+failure modes make it fragile: (1) **local models can loop the exec call** — on the source
+deployment a local 12B repeated the identical exec 20× until OpenClaw's loop detector blocked the
+session, silently killing the cycle for three days (`consecutiveErrors` climbing, nothing posted);
+(2) on OpenClaw **2026.6.5 the `command` cron payload is accepted by the CLI but silently ignored
+by the state-db loader** (only `agentTurn`/`systemEvent` rows load), so you can't just drop the
+LLM out of the managed job. The robust alternative is a plain **host cron** on the Docker host —
+no LLM in the scheduling path:
+
+```cron
+0 12 * * * docker exec "$SOC_OPENCLAW_CONTAINER" "$SOC_AGENT_HOME/soc-cycle/soc-cycle.sh"
+```
+
+Wrap it in a small script that posts a Discord failure notice on non-zero exit (via
+`docker exec <container> openclaw message send …`) so failures aren't silent. If you go this way,
+disable (don't delete) the OpenClaw cron job. On Unraid specifically, put the cron snippet in
+`/boot/config/plugins/dynamix/<name>.cron` and run `update_cron` — that survives reboots.
+
 ## The briefing shape
 
 `soc-cycle.sh` extracts a tight, Discord-friendly briefing from the report (best-effort, degrades to
