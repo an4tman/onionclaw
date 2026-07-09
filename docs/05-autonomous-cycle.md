@@ -110,9 +110,10 @@ disable (don't delete) the OpenClaw cron job. On Unraid specifically, put the cr
 "see attached" if the report shape drifts): a severity-tagged headline (🔴 ESCALATE / 🟠 ATTENTION /
 🟢 NOMINAL), the bounded-assurance bottom line, an "Interesting" insight line, a verdict tally, one
 line per report section, the escalation arrows, and a **count of tuning proposals**. Each proposal
-is then posted as **its own follow-up message** (verbatim block + a `✅ react to approve · ❌ to
-dismiss · or reply approve <token>` hint) so an operator reaction unambiguously targets one
-proposal. The full report `.md` is always attached to the briefing.
+is then posted as **its own follow-up message** (verbatim block + an approve hint) so it is
+skimmable — and so a reaction unambiguously targets one proposal on builds that deliver reaction
+events (see [09-operator-runbook](09-operator-runbook.md)). The full report `.md` is always
+attached to the briefing.
 
 ## Tuning the cadence & scope
 

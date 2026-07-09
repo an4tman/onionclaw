@@ -8,14 +8,29 @@ alert can shape a *proposal* but the proposal is just data until a human-gated
 ``apply`` PUTs it.
 
 Override shapes are the VERIFIED SO 2.4 contract (from the live box + the
-so-tune-detection-*-request.har captures, 2026-06-02):
+so-tune-detection-*-request.har captures, 2026-06-02; customFilter from SO's
+own ``model/detection.go`` Override struct + ``PrepareForSigma``, 2026-07-09):
 
-    suppress  -> {"type","isEnabled","note","track","ip"}
-    threshold -> {"type","isEnabled","note","thresholdType","track","count","seconds"}
-    modify    -> {"type","isEnabled","note","regex","value"}
+    suppress     -> {"type","isEnabled","note","track","ip"}            (suricata)
+    threshold    -> {"type","isEnabled","note","thresholdType","track","count","seconds"} (suricata)
+    modify       -> {"type","isEnabled","note","regex","value"}         (suricata)
+    customFilter -> {"type","isEnabled","note","customFilter"}          (elastalert/Sigma)
 
 ``disable`` is special: SO disables a detection by flipping the top-level
 ``isEnabled`` to false, NOT by adding an override.
+
+OVERRIDE TYPES ARE ENGINE-SPECIFIC (SO rejects a mismatch with an opaque
+HTTP 400 at PUT time -- the trap this module's ``check_engine`` closes at
+propose time): Suricata/NIDS rules take suppress/threshold/modify; Sigma
+(engine ``elastalert``) rules take ONLY ``customFilter`` -- a YAML map whose
+top-level ``sofilter*`` keys each hold a Sigma detection-style field map that
+SO merges into the rule as an exclusion (``and not sofilter``), e.g.::
+
+    sofilter:
+      host.name: hal
+
+The gateway builds that YAML from ``scope["filter"]`` (a flat dict of
+field -> scalar-or-list), so callers never hand-write YAML.
 
 A tuning is applied by PUTting the WHOLE detection object back with the new
 ``overrides``/``isEnabled`` -- so apply/revert here operate on the full
@@ -25,17 +40,31 @@ the audit/undo record).
 
 import copy
 import ipaddress
+import json
+import re
 
 # The override types the gateway can build. ``disable`` is handled specially
 # (it flips isEnabled) but is listed so propose/validate accept it.
-VALID_TYPES = frozenset({"suppress", "threshold", "modify", "disable"})
+VALID_TYPES = frozenset({"suppress", "threshold", "modify", "disable", "customFilter"})
 
 # Types that silence broadly -> the spec requires a louder/second confirm
 # ("double-gated"). The gateway tags these so the workflow can enforce it.
 DOUBLE_GATED_TYPES = frozenset({"disable", "modify"})
 
+# Which override types each SO detection engine accepts (SO model/detection.go
+# + the SOC UI's overrideTypes map). ``disable`` (top-level isEnabled flip)
+# works for every engine.
+ENGINE_TYPES = {
+    "suricata": frozenset({"suppress", "threshold", "modify", "disable"}),
+    "elastalert": frozenset({"customFilter", "disable"}),
+    "strelka": frozenset({"disable"}),
+}
+
 _VALID_TRACK = frozenset({"by_src", "by_dst", "by_either"})
 _VALID_THRESHOLD_TYPE = frozenset({"threshold", "limit", "both"})
+
+# Sigma filter field names: dotted ECS-style paths (host.name, process.parent.executable).
+_FILTER_FIELD = re.compile(r"^[A-Za-z0-9_@][A-Za-z0-9_@.\-]*$")
 
 
 class InvalidTuningError(ValueError):
@@ -44,6 +73,64 @@ class InvalidTuningError(ValueError):
     Raised by ``build_override`` so ``propose_tuning`` can reject injected /
     malformed input *before* any token is issued and long before any write.
     """
+
+
+def check_engine(engine: str | None, override_type: str) -> None:
+    """Reject an override type the detection's engine cannot take.
+
+    SO only fails this at PUT time with an opaque ``400 The request could not
+    be processed`` -- catching it here means propose_tuning refuses BEFORE a
+    token is issued, with a message that says what to do instead.
+    """
+    allowed = ENGINE_TYPES.get((engine or "").lower())
+    if allowed is None:
+        return  # unknown engine: let SO be the judge rather than block
+    if override_type not in allowed:
+        hint = ""
+        if engine == "elastalert":
+            hint = (
+                " Sigma/elastalert detections take a 'customFilter' override: "
+                "re-propose with override_type='customFilter' and "
+                "scope={'filter': {'<ecs.field>': '<value>', ...}}."
+            )
+        raise InvalidTuningError(
+            f"override type {override_type!r} is not valid for engine {engine!r} "
+            f"(allowed: {sorted(allowed)})." + hint
+        )
+
+
+def _yaml_scalar(value) -> str:
+    """Render a scalar as safe YAML (JSON string quoting is valid YAML)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(str(value))
+
+
+def _build_custom_filter_yaml(filter_map: dict) -> str:
+    """Render ``scope['filter']`` as the sofilter YAML SO expects.
+
+    One ``sofilter`` block; multiple fields AND together (Sigma map
+    semantics), a list value means any-of for that field.
+    """
+    lines = ["sofilter:"]
+    for field, value in filter_map.items():
+        if not isinstance(field, str) or not _FILTER_FIELD.match(field):
+            raise InvalidTuningError(f"invalid filter field name {field!r}")
+        if isinstance(value, (list, tuple)):
+            if not value:
+                raise InvalidTuningError(f"filter field {field!r} has an empty list value")
+            lines.append(f"  {field}:")
+            for v in value:
+                if isinstance(v, (dict, list, tuple)):
+                    raise InvalidTuningError(f"filter field {field!r} values must be scalars")
+                lines.append(f"    - {_yaml_scalar(v)}")
+        elif isinstance(value, dict):
+            raise InvalidTuningError(f"filter field {field!r} value must be a scalar or list")
+        else:
+            lines.append(f"  {field}: {_yaml_scalar(value)}")
+    return "\n".join(lines) + "\n"
 
 
 def _validate_ip(value: str) -> str:
@@ -84,6 +171,20 @@ def build_override(override_type: str, scope: dict, note: str) -> dict:
     if override_type == "disable":
         # Sentinel; apply_override turns this into isEnabled=false.
         return {"type": "disable", "isEnabled": True, "note": note}
+
+    if override_type == "customFilter":
+        filter_map = scope.get("filter")
+        if not isinstance(filter_map, dict) or not filter_map:
+            raise InvalidTuningError(
+                "customFilter requires scope={'filter': {'<ecs.field>': <value>, ...}} "
+                "(a non-empty field->value map; the gateway renders the sofilter YAML)"
+            )
+        return {
+            "type": "customFilter",
+            "isEnabled": True,
+            "note": note,
+            "customFilter": _build_custom_filter_yaml(filter_map),
+        }
 
     if override_type == "suppress":
         track = scope.get("track", "by_either")

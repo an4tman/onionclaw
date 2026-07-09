@@ -7,7 +7,7 @@ happens in your Discord SOC channel (`SOC_DISCORD_CHANNEL`); the `soc` agent han
 
 | You do | What happens |
 |---|---|
-| React **✅** (or 👍) on a proposal message | Approve that proposal — the slick path. The `soc` agent applies the one token in that message. React **❌** (or 🚫) to dismiss it. |
+| React **✅** (or 👍) on a proposal message | Approve that proposal — **requires an OpenClaw build that delivers Discord reaction events** (2026.6.5 does not: the reaction listener exists in the bundle but is never registered; verify on yours before relying on it). The `soc` agent applies the one token in that message; **❌**/🚫 dismisses. |
 | `approve <token>` | Apply a tuning the cycle proposed. The `soc` agent calls `apply_tuning(token)` — the single SO write. Audited + reversible. |
 | `approve` (bare) | With exactly one proposal pending, approves it; otherwise the agent lists what's pending and asks which. |
 | `revert <handle>` | Undo a previously-applied tuning. The agent calls `revert_tuning(handle)` and restores the captured prior state. |
@@ -24,15 +24,17 @@ Notes:
   pending") shows what's still open.
 - `disable`/`modify` proposals are **double-gated** — the agent asks for a second confirm before
   applying, because they're broader than a `suppress`.
-- Reaction approval works because each proposal is **its own message** and Discord reaction
-  notifications (mode `"own"`, the default) surface reactions on the bot's messages to the agent.
+- Reaction approval depends on your OpenClaw build delivering Discord reaction events
+  (`reactionNotifications`, default `"own"`). **Test it**: react to any bot message and ask the
+  agent what it saw. On builds without it (2026.6.5), typed approval is the path — proposals are
+  still one message each, so the reaction flow lights up after an upgrade with no other change.
 
 ## Reading a briefing
 
 Each cycle posts one briefing message: a severity dot (🔴 ESCALATE / 🟠 ATTENTION / 🟢 NOMINAL),
 the **bounded-assurance bottom line** (what was detected vs. what the telemetry could see), an
 **Interesting** insight, a verdict tally, one line per report section, the escalation arrows (`→`),
-and a count of tuning proposals. Each **proposal follows as its own message** (react ✅ to approve).
+and a count of tuning proposals. Each **proposal follows as its own message** with its approve line.
 The full report `.md` is attached — open it for the evidence, queries, and per-group reasoning.
 
 > Read the bottom line as bounded assurance, never "all clear." A 🟢 NOMINAL means nothing cleared

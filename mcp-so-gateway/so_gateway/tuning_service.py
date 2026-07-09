@@ -79,6 +79,10 @@ class TuningService:
         # Fetch the current detection (read-only) to compute the exact change
         # and capture the prior state for the eventual undo record.
         detection = self._client.get_detection_by_public_id(public_id)
+        # Engine-aware gate: Suricata-style overrides on a Sigma rule (or vice
+        # versa) would 400 opaquely at SO PUT time -- refuse here, pre-token,
+        # with a message that says what to propose instead.
+        tuning.check_engine(detection.get("engine"), override_type)
         prior_state = tuning.capture_prior_state(detection)
         new_detection = tuning.apply_override(detection, override)
 

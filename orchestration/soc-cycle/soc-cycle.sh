@@ -153,10 +153,11 @@ PROPOSALS=$(awk '
 N_PROP=$(printf '%s\n' "$PROPOSALS" | grep -cE '^PROPOSAL [—-]' || true)
 
 # Proposals are delivered as SEPARATE follow-up messages (one per proposal, sent after the
-# briefing below) so an operator reaction targets exactly one proposal: react ✅ to approve,
-# ❌ to dismiss — or reply `approve <token>` as always. The briefing just counts them.
+# briefing below): skimmable, and ready for reaction-approval once the OpenClaw build delivers
+# Discord reaction events (2026.6.5 does NOT — the listener is exported but never registered;
+# re-verify after an upgrade, then restore the react hint). The briefing just counts them.
 if [ "${N_PROP:-0}" -gt 0 ]; then
-  PROP_SECTION=$(printf '\n**5 · Tuning proposals (%s) — operator-gated**\nPosted below, one message each: react ✅ to approve (❌ to dismiss) or reply `approve <token>`. Nothing is applied until you do.\n' \
+  PROP_SECTION=$(printf '\n**5 · Tuning proposals (%s) — operator-gated**\nPosted below, one message each — reply `approve <token>` (or just `approve` if only one is pending). Nothing is applied until you do.\n' \
     "$N_PROP")
 else
   PROP_SECTION=$(printf '\n**5 · Tuning proposals** — none this cycle.\n')
@@ -202,7 +203,7 @@ if [ "${N_PROP:-0}" -gt 0 ]; then
   '
   for PF in "$PROPDIR"/prop-*.txt; do
     [ -f "$PF" ] || continue
-    PROP_MSG=$(printf '%s\n\n✅ react to approve · ❌ react to dismiss · or reply `approve <token>`' "$(cat "$PF")")
+    PROP_MSG=$(printf '%s\n\nTo apply: reply `approve <token>` (or just `approve` if this is the only one pending). To reject: ignore it.' "$(cat "$PF")")
     openclaw message send \
       --channel discord --target "$DISCORD_CHANNEL" \
       -m "$PROP_MSG"

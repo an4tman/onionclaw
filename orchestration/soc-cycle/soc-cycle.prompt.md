@@ -67,10 +67,18 @@ instead of proposing. Some narrow suppressions may already be live in your deplo
 candidate is actually firing and unsuppressed in-window before proposing (check `list_tunings` and
 the live alert volume).
 
-Call shape: `propose_tuning(public_id="<sid or rule.uuid>", override_type="suppress",
-scope={"track":"by_dst","ip":"<host or CIDR>"}, rationale="<one-line evidence>")` (use `by_src`
-when the explaining host is the source). At most a couple of proposals per cycle, for the clearest
-FPs.
+Call shape — **match the rule's engine** (check `get_detection` `engine`; the gateway rejects a
+mismatch at propose time):
+- **Suricata** (numeric sid): `propose_tuning(public_id="<sid>", override_type="suppress",
+  scope={"track":"by_dst","ip":"<host or CIDR>"}, rationale="<one-line evidence>")` (use `by_src`
+  when the explaining host is the source).
+- **Sigma** (UUID, engine `elastalert`): `propose_tuning(public_id="<rule.uuid>",
+  override_type="customFilter", scope={"filter": {"<ecs.field>": "<value>", ...}},
+  rationale="<one-line evidence>")` — fields AND together; prefer the narrowest behavior-specific
+  filter (e.g. `host.name` plus the exact `process.parent.executable`), not a host-wide exclusion,
+  unless the rule is a pure platform mismatch for that host.
+
+At most a couple of proposals per cycle, for the clearest FPs.
 
 ## Telemetry coverage (state current coverage each cycle)
 

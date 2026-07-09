@@ -176,9 +176,11 @@ posts — word-pair tokens like `amber-fox`, one Discord message per proposal):
 - The operator **reacting ✅ (or 👍) to a proposal message** → approval of the
   single token that message contains: call `apply_tuning` with it and reply
   with status + handle. **❌ / 🚫** → dismissed; acknowledge, apply nothing.
-  Reaction events reach the agent because Discord reaction notifications
-  default to `"own"` (reactions on the bot's own messages); the cycle posts
-  one message per proposal precisely so a reaction is unambiguous.
+  Reaction events reach the agent only on OpenClaw builds that deliver
+  Discord reaction notifications (default mode `"own"` = reactions on the
+  bot's own messages). **Verified absent on 2026.6.5** (the listener is
+  exported but never registered) — test on your build; the cycle posts one
+  message per proposal precisely so a reaction is unambiguous once delivered.
 - A **bare `approve`** with no token → call `list_pending_proposals`; exactly
   one pending proposal means approve that one, otherwise show the list and ask
   which.
