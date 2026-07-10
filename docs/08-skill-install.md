@@ -59,6 +59,15 @@ source of truth; you just get to teach from your phone.
 One wrinkle if you installed the skill into two runtimes: the gateway writes the copies
 it can reach (`GROUNDING_PATHS` takes multiple colon-separated paths if both are on the
 Docker host). A Claude Code copy on another machine still needs the manual re-sync below.
+Any agent that can't read the skill files can still pull the live grounding over MCP with
+the gateway's read-only `get_grounding` tool.
+
+If you run a knowledge-base MCP alongside this suite, surface the grounding through it
+instead of copying it: bind-mount the skill's `references/` dir read-only into the kb
+server's tree so the file gets indexed like any other page. The source deployment does
+exactly this with its kb gateway; one physical file, one gated write path, discoverable
+everywhere. (Gotcha: the nested mountpoint directory must already exist inside the kb
+source on the host, because Docker can't mkdir inside a read-only bind.)
 
 ## 2. Install into Claude Code
 

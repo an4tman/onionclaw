@@ -284,6 +284,18 @@ def list_groundings() -> list:
     return _get_grounding_service().list_groundings()
 
 
+def get_grounding() -> dict:
+    """Return the current grounding (environment.md) content. READ-ONLY.
+
+    Gives any MCP client the analyst's live environment model without file
+    access: ``{configured, sections, files: [{path, content}]}``. Use it to
+    show the operator the current grounding, to check whether an entity is
+    already documented before proposing, or to ground an agent that can't
+    read the skill files directly.
+    """
+    return _get_grounding_service().get_grounding()
+
+
 # ---------------------------------------------------------------------------
 # THREAT-INTEL ENRICHMENT tools (Component 2). READ-ONLY.
 #
@@ -355,6 +367,7 @@ mcp.tool()(propose_grounding)
 mcp.tool()(apply_grounding)
 mcp.tool()(revert_grounding)
 mcp.tool()(list_groundings)
+mcp.tool()(get_grounding)
 mcp.tool()(enrich_iocs)
 mcp.tool()(ti_provider_status)
 mcp.tool()(extract_iocs)

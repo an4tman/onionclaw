@@ -390,6 +390,20 @@ class GroundingService:
         self._store.mark_reverted(handle)
         return {"handle": handle, "status": "reverted", "files": results}
 
+    # -- read --------------------------------------------------------------
+
+    def get_grounding(self) -> dict:
+        """Current grounding content (read-only): every configured file, verbatim."""
+        if not self._paths:
+            return {"configured": False, "files": []}
+        return {
+            "configured": True,
+            "sections": sorted(SECTIONS),
+            "files": [
+                {"path": p, "content": _read(p)} for p in self._paths
+            ],
+        }
+
     # -- list --------------------------------------------------------------
 
     def list_groundings(self) -> list[dict]:

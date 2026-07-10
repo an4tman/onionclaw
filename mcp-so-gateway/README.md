@@ -34,6 +34,7 @@ Deployment walkthrough: [../docs/03-mcp-deployment.md](../docs/03-mcp-deployment
 | `apply_grounding` | yes | Append the proposed entry under its section heading in every configured grounding file (atomic; multi-file rollback); records an undo |
 | `revert_grounding` | yes | Remove exactly the inserted block (later hand-edits survive) |
 | `list_groundings` | no | Applied grounding entries + undo handles |
+| `get_grounding` | no | The current environment.md content, verbatim, for any MCP client |
 
 These power the operator's `learn <entity>: <what it is>` flow: the analyst's model of
 the network is a file the operator teaches, through the same token gate as tunings. The

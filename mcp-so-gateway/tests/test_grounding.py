@@ -267,3 +267,17 @@ def test_store_survives_reopen(tmp_path):
     reverted = svc2.revert_grounding(applied["handle"])
     assert reverted["status"] == "reverted"
     assert open(paths[0]).read() == TEMPLATE
+
+
+def test_get_grounding_returns_content(tmp_path):
+    svc, paths = _service(tmp_path)
+    out = svc.get_grounding()
+    assert out["configured"] is True
+    assert out["files"][0]["path"] == paths[0]
+    assert "## Host table" in out["files"][0]["content"]
+    assert "host_table" in out["sections"]
+
+
+def test_get_grounding_unconfigured(tmp_path):
+    svc = GroundingService([], GroundingStore(str(tmp_path / "a.sqlite")))
+    assert svc.get_grounding() == {"configured": False, "files": []}

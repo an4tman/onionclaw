@@ -18,6 +18,7 @@ design goal, anyway. The `soc` agent handles the commands.
 | `dismiss <id>` | Decline an escalation candidate. No investigation. |
 | `learn <entity>: <what it is>` | Teach the analyst your network. The agent drafts the `environment.md` entry from your words, shows it with a token, and writes it only when you approve. Answers the briefing's `GROUNDING GAP` lines. |
 | `list groundings` | List applied grounding entries and their undo handles. |
+| "show the grounding" | The agent calls `get_grounding` and shows the current environment.md, so you can check what the analyst believes about your network. |
 
 Notes:
 - Tokens and handles are short word pairs (e.g. `amber-fox`): easy to retype on a phone,
