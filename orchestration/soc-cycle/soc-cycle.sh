@@ -1,6 +1,6 @@
 #!/bin/sh
 # SOC triage cycle — headless, READ-ONLY, container-side.
-# Runs the bounded SOC prompt via Claude Code (operator subscription), captures the
+# Runs the bounded SOC prompt via headless Claude Code, captures the
 # report, then delivers a clean analyst-style briefing to the operator's Discord channel.
 #
 # Read-only by construction: --allowedTools is scoped to the elasticsearch MCP plus the
@@ -44,7 +44,7 @@ DISCORD_CHANNEL="$SOC_DISCORD_CHANNEL"
 
 mkdir -p "$REPORTS"
 
-# 1. Auth + config for headless Claude Code (subscription token, isolated config dir).
+# 1. Auth + config for headless Claude Code (isolated config dir).
 . "$SOC_CLAUDE_ENV"
 export CLAUDE_CONFIG_DIR="$SOC_CLAUDE_CONFIG_DIR"
 

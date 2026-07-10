@@ -2,7 +2,7 @@
 # IR deep-investigation runner — headless, READ-ONLY, container-side.
 # Spawned by OpenClaw AFTER the operator approves launch (GATE 1: `investigate <id>`).
 # Runs the IR escalation team (Triage -> [Telemetry ‖ Threat-Intel] -> Response Planner ->
-# Reporter) via Claude Code (operator subscription), captures the single converged incident
+# Reporter) via headless Claude Code, captures the single converged incident
 # record, and posts it to the operator's SOC Discord channel. STOPS at GATE 2 — the team
 # never writes to Security Onion and never applies anything.
 #
@@ -32,7 +32,7 @@ DISCORD_CHANNEL="$SOC_DISCORD_CHANNEL"
 
 mkdir -p "$REPORTS"
 
-# Auth + isolated config for headless Claude Code (subscription token).
+# Auth + isolated config for headless Claude Code.
 . "$SOC_CLAUDE_ENV"
 export CLAUDE_CONFIG_DIR="$SOC_CLAUDE_CONFIG_DIR"
 

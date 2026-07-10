@@ -1,10 +1,10 @@
 # Architecture
 
-`onionclaw` is an **autonomous SOC analyst** layered over a [Security Onion](https://securityonion.net)
-deployment. It triages alerts read-only, reports honestly to chat, proposes narrow tuning changes
-behind an operator approval gate, enriches indicators with threat intel, and can escalate to a
-read-only incident-response (IR) agent-team — all driven by a Claude subscription from inside an
-[OpenClaw](https://docs.openclaw.ai) personal-assistant gateway.
+The whole machine on one page. OnionClaw bolts an analyst onto a
+[Security Onion](https://securityonion.net) box: a headless Claude Code session inside an
+[OpenClaw](https://docs.openclaw.ai) gateway does the daily triage, a Discord channel is
+the console, and anything that could actually change your SO config waits for you to say
+so. This page is the map; the numbered docs are the build order.
 
 ## The pieces
 
@@ -14,18 +14,18 @@ read-only incident-response (IR) agent-team — all driven by a Claude subscript
                          │   • Elasticsearch (telemetry)                 │
                          │   • Core API (detections, playbooks, tuning)  │
                          └───────────────▲──────────────▲───────────────┘
-                  read-only ES queries   │              │  Core API (read + gated write)
+                  read-only ES queries   │              │  Core API (read + approved writes)
                          ┌───────────────┴──────┐   ┌───┴───────────────────────┐
                          │  mcp-elasticsearch    │   │  mcp-so-gateway (THIS repo)│
                          │  :9220  (read-only)   │   │  :9221                     │
-                         └───────────────▲──────┘   │  read tools · gated tuning │
+                         └───────────────▲──────┘   │  read tools · tuning       │
                                          │          │  writes · TI enrichment    │
                                          │          └───▲────────────────────────┘
                                          │ MCP (HTTP)    │ MCP (HTTP)
                          ┌───────────────┴───────────────┴────────────────────────┐
                          │  OpenClaw container                                     │
-                         │   • `soc` agent (cloud Claude)  ← Discord channel bind  │
-                         │   • managed cron ─► soc-cycle.sh (headless `claude -p`) │
+                         │   • `soc` agent  ← Discord channel bind                 │
+                         │   • cron ─► soc-cycle.sh (headless `claude -p`)         │
                          │   • coding-agent ─► ir-investigate.sh / self-improve    │
                          │   • `soc-analyst` skill (methodology + environment.md)  │
                          └───────────────────────────▲────────────────────────────┘
@@ -37,46 +37,61 @@ read-only incident-response (IR) agent-team — all driven by a Claude subscript
 
 | Component | What it is | Where it lives |
 |---|---|---|
-| **`soc-analyst` skill** | The portable *methodology* — triage workflow, verdict taxonomy, query discipline, safety. Reads your per-deployment `environment.md` for grounding. | `skill/soc-analyst/` → installed into Claude Code + OpenClaw |
-| **`mcp-elasticsearch`** | Read-only bridge to SO's Elasticsearch (search/esql/mappings). *Not bundled* — a standard read-only ES MCP. | external container, `:9220` |
-| **`mcp-so-gateway`** | SO Core API gateway: read tools, **operator-gated** tuning writes, threat-intel enrichment. Holds the only SO write credential. | `mcp-so-gateway/` → container `:9221` |
-| **Autonomous cycle** | Daily headless triage → honest Discord briefing + proposals. | `orchestration/soc-cycle/` |
-| **IR agent-team** | Operator-approved, read-only deep investigation (5 facets → one incident record). | `orchestration/ir-team/` |
-| **Self-improvement worker** | Capacity-gated, artifact-only worker that drafts proposals from the backlog. | `orchestration/self-improve/` |
-| **SO-host helpers** | Optional SO-box add-ons: clock-resync override + signature-update health monitor. | `security-onion/` |
-| **Site config** | One file (`soc-suite.env`) holding every environment-specific value. | `config/` |
+| `soc-analyst` skill | The portable methodology: triage workflow, verdict taxonomy, query discipline, safety. Reads your per-deployment `environment.md` for grounding. | `skill/soc-analyst/` → installed into Claude Code + OpenClaw |
+| `mcp-elasticsearch` | Read-only bridge to SO's Elasticsearch (search/esql/mappings). Not bundled; a standard read-only ES MCP. | external container, `:9220` |
+| `mcp-so-gateway` | SO Core API gateway: read tools, tuning writes that wait for your approval, threat-intel enrichment. Holds the only SO write credential. | `mcp-so-gateway/` → container `:9221` |
+| Autonomous cycle | Daily headless triage → Discord briefing + proposals. | `orchestration/soc-cycle/` |
+| IR team | Read-only deep investigation you launch on a candidate (5 facets → one incident record). | `orchestration/ir-team/` |
+| Self-improvement worker | Drafts proposals from the backlog. Artifact-only, off by default. | `orchestration/self-improve/` |
+| SO-host helpers | Optional SO-box add-ons: clock-resync override + signature-update health monitor. | `security-onion/` |
+| Site config | One file (`soc-suite.env`) holding every environment-specific value. | `config/` |
 
 ## The runtime model (load-bearing decisions)
 
-- **Cloud Claude drives the tools, not a local model.** The cycle and IR team run as headless
-  `claude -p` on the operator's Claude **subscription**, inside the OpenClaw container. Local/heavy
-  models loop on tool calls and never reliably reach the write step — so the `soc` agent and the
-  headless runs are pinned to a cloud model (`SOC_CLOUD_MODEL`).
-- **Read-only by construction; writes are gated.** The cycle's tool allowlist excludes every write
-  tool, so it *physically cannot* tune. `propose_tuning` is read-only and issues a single-use token;
-  the operator types `approve <token>` in Discord and only then does the `soc` agent call
-  `apply_tuning`. Every applied write is audited and reversible (`revert_tuning`).
-- **Two human gates for deep investigation.** An escalation candidate is *proposed*; the operator
-  types `investigate <id>` to launch the read-only IR team (GATE 1); the team converges to one
-  record and stops at a recommended action the operator applies (GATE 2). The team never writes.
-- **Telemetry is untrusted.** Alert/log content can carry prompt-injection; every prompt treats it
-  as data to analyze, never instructions. Enrichment ships only external indicator *values* to the
-  enabled TI providers (RFC1918 dropped).
+- **Grounding is the whole ballgame.** The analyst reads your `environment.md` (host
+  table, what each box is supposed to do, documented FP baselines, named blind spots) at
+  the start of every run. Feed it a wrong or stale host table and you get confident
+  nonsense with query citations. The methodology ships in the skill; the judgment comes
+  from what you teach it about your network. See [08-skill-install](08-skill-install.md),
+  and treat that file as a living document, not a form you fill in once.
+- **The headless runs are Claude Code, not the OpenClaw agent.** The cycle and the IR team run
+  as `claude -p` inside the OpenClaw container, authenticated with their own credentials
+  (an Anthropic API key in `claude.env`), separate from whatever model OpenClaw's agents use.
+  The cycle is tool-heavy and needs a model that drives many tool calls reliably; weak local
+  models loop on tool calls and never finish. The interactive `soc` agent that handles Discord
+  approvals is a normal OpenClaw agent and can run on a local model if it has solid tool
+  calling (the source deployment runs a local 12B there, routed through LiteLLM), but verify
+  the approve-to-apply path before trusting one.
+- **Reads are open, writes wait for you.** The cycle's tool allowlist excludes every write
+  tool, so it cannot tune anything. `propose_tuning` is itself read-only: it validates,
+  previews blast radius, and returns a single-use token. You type `approve <token>` in
+  Discord, and only then does the `soc` agent call `apply_tuning`. Every applied write is
+  audited and reversible (`revert_tuning`).
+- **Two human decisions gate a deep investigation.** The cycle proposes an escalation
+  candidate; you type `investigate <id>` to launch the read-only IR team (gate 1); the team
+  converges to one record and stops at a recommended action that you apply yourself (gate 2).
+  The team never writes.
+- **Telemetry is untrusted.** Alert and log content can carry prompt injection, so every
+  prompt treats it as data to analyze, never as instructions. Enrichment sends only external
+  indicator values to the TI providers you enabled (RFC1918 is dropped).
 
 See [10-security-model.md](10-security-model.md) for the full safety model and the binding
 monitoring tenets.
 
-## Data flow — a daily cycle
+## Data flow of a daily cycle
 
-1. OpenClaw's managed cron fires `soc-cycle.sh` (`SOC_CYCLE_CRON`, `SOC_TZ`).
-2. It runs headless `claude -p` with a read-only tool scope, the cycle prompt, and the `soc-analyst`
-   skill (which loads your `environment.md`).
-3. The agent surveys ~24h of alerts via the Elastic MCP, pulls detections/playbooks and enriches
-   external IOCs via the gateway, and writes a bounded-assurance report.
-4. For clear false positives it calls `propose_tuning` (read-only) → tokens.
-5. `soc-cycle.sh` posts one clean Discord briefing + the full report attached.
-6. The operator replies `approve <token>` (apply a tuning) / `investigate <id>` (launch IR) /
-   `revert <handle>` / `dismiss <id>` — handled by the `soc` agent in the channel.
+1. Cron fires `soc-cycle.sh` (`SOC_CYCLE_CRON`, `SOC_TZ`). This can be OpenClaw's managed
+   cron or a plain host cron; see [05-autonomous-cycle](05-autonomous-cycle.md) for the
+   tradeoff.
+2. The wrapper runs headless `claude -p` with a read-only tool scope, the cycle prompt, and
+   the `soc-analyst` skill (which loads your `environment.md`).
+3. The agent surveys ~24h of alerts via the Elastic MCP, pulls detections and playbooks,
+   enriches external IOCs via the gateway, and writes a report that states its coverage and
+   blind spots.
+4. For clear false positives it calls `propose_tuning` (read-only) and collects tokens.
+5. `soc-cycle.sh` posts one clean Discord briefing with the full report attached.
+6. You reply `approve <token>` (apply a tuning), `investigate <id>` (launch IR),
+   `revert <handle>`, or `dismiss <id>`. The `soc` agent in the channel handles these.
 
 ## Install order
 

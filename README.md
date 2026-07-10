@@ -1,113 +1,121 @@
 # OnionClaw
 
-**Security Onion × OpenClaw** — an **autonomous SOC analyst** for a [Security Onion](https://securityonion.net) home/lab
-deployment. It triages your alerts read-only on a schedule, posts an honest, bounded-assurance
-briefing to chat, proposes *narrow* tuning changes behind an operator approval gate, enriches
-indicators with threat intel, and can escalate to a read-only incident-response agent-team — all
-driven by a Claude subscription from inside an [OpenClaw](https://docs.openclaw.ai)
-personal-assistant gateway.
+> **Read this first.** Hobby project. Alpha. Unsupported. It came out of one homelab and
+> it has bugs I haven't met yet. If it breaks, you get to keep both pieces. It is also,
+> and I say this with the confidence of someone who watches it run every day, extremely
+> cool.
 
-> **Status:** consolidated from a working home-lab deployment into an installable package. It is
-> **not** a turnkey appliance — it assumes you run (or are willing to stand up) the dependency stack
-> below and work through the setup. Every environment-specific value is parameterized into one
-> config file; nothing is hardcoded to the original network.
+Security Onion is great. Being the only analyst on your own Security Onion box is not.
+The queue fills up with the same platform-mismatch Sigma noise every single day, and the
+one alert that matters is buried under two hundred that don't. I got tired of being the
+night shift, so I made Claude do it.
 
-## What you get
+Once a day a headless Claude Code session wakes up inside my OpenClaw gateway and works
+the queue like an analyst who actually read the SOPs: it pulls the last ~24h of alerts
+out of SO's Elasticsearch, groups them, reads SO's own playbook for each detection,
+pivots through Zeek and endpoint data, runs the external indicators past threat intel,
+and posts one briefing to my Discord. It is not allowed to say "all clear". Ever. It
+reports what it detected, what its sensors could and couldn't see, and what it thinks
+should happen next.
 
-- **`soc-analyst` skill** — the portable triage methodology (workflow, verdict taxonomy, query
-  discipline, safety), grounded by a per-deployment `environment.md` you fill in.
-- **`mcp-so-gateway`** — a tested MCP server for SO's Core API: read tools, **operator-gated**
-  tuning writes (audited, reversible), and threat-intel enrichment (OTX/AbuseIPDB/VirusTotal +
-  keyless feeds). Holds the only SO write credential.
-- **Autonomous cycle** — a daily headless triage → one clean Discord briefing + the full report.
-- **IR agent-team** — operator-approved, read-only deep investigation that converges to one incident
+When it finds an obvious false positive it drafts the narrowest suppression that kills
+the noise and hands me a token. Nothing touches Security Onion until I type
+`approve amber-fox` in the channel. Every applied change is logged with its prior state;
+`revert` puts it back. When something actually smells wrong I type `investigate <id>` and
+a read-only IR team requalifies the candidate, builds the timeline, maps it to ATT&CK,
+and hands back one incident record with exactly one recommended action. I apply it or I
+don't. The agents never do.
+
+The important part, and the reason I trust it at 3am: the daily cycle *cannot* write.
+Its tool allowlist simply doesn't contain a write tool. This isn't a prompt promising to
+behave. There is no tool to misbehave with.
+
+## What's in the box
+
+- `skill/soc-analyst/`: the triage methodology as a skill. Workflow, verdict taxonomy,
+  query discipline, the safety rules. You feed it an `environment.md` describing your
+  network, because an analyst who doesn't know what's normal on your LAN is just a
+  random-verdict generator.
+- `mcp-so-gateway/`: an MCP server for SO's Core API. Reads detections and playbooks,
+  holds the only SO write credential, does the propose/approve/revert tuning dance, and
+  enriches IOCs (OTX, AbuseIPDB, VirusTotal, plus the keyless feeds). Tested; run
+  `uv run pytest` and see.
+- `orchestration/soc-cycle/`: the daily triage run. One wrapper script, one prompt, one
+  briefing in your Discord.
+- `orchestration/ir-team/`: the deep-dive team. Five roles, read-only, converges to one
   record and stops.
-- **Self-improvement worker** — a capacity-gated, artifact-only worker that drafts proposals from the
-  backlog (off by default).
-- **SO-host helpers** — optional clock-resync override + signature-update health monitor.
-- **Full setup docs** — Security Onion, MCP deployment, OpenClaw wiring, the cycle/IR/self-improve
-  install, the operator runbook, and the security model.
+- `orchestration/self-improve/`: a worker that turns the backlog into reviewable git
+  branches. Off by default, and it should stay off until you've watched it work.
+- `security-onion/`: two small quality-of-life things for the SO box itself (a clock
+  resync fix for VMs that got paused, and a watchdog for the daily rule update, because
+  a silently stale ruleset is worse than no ruleset).
+- `docs/`: the whole setup, in order, including the security model. Read `docs/10` even
+  if you read nothing else.
 
-## Architecture at a glance
+## The shape of it
 
 ```
 Security Onion ──▶ mcp-elasticsearch (:9220, read-only) ─┐
-   (your box)  ──▶ mcp-so-gateway   (:9221, read+gated write) ─┤
+   (your box)  ──▶ mcp-so-gateway   (:9221, read + approved writes) ─┤
                                                                ▼
                        OpenClaw  ──(headless claude -p)──▶ soc-cycle / ir-team
-                          │  soc agent (cloud Claude) + managed cron + coding-agent
+                          │  soc agent + cron + coding-agent
                           ▼
                        Discord  ◀── briefings · approvals (approve / investigate / revert)
 ```
 
-Full diagram and the load-bearing runtime decisions: **[docs/00-architecture.md](docs/00-architecture.md)**.
+Full picture and the reasoning behind it: [docs/00-architecture.md](docs/00-architecture.md).
 
-## Repository layout
+## What you need
 
-```
-onionclaw/
-├── bin/install.sh                   # preflight + gateway deploy + orchestration install
-├── config/soc-suite.env.example     # the ONE place every site-specific value lives
-├── docs/                            # 00-architecture … 10-security-model
-├── mcp-so-gateway/                  # the SO Core API gateway (source + tests + Dockerfile)
-├── skill/soc-analyst/               # the analyst skill + environment.md (you fill in)
-├── orchestration/                   # the headless runtime (installed into the OpenClaw container)
-│   ├── lib/soc-suite-config.sh      #   config loader (sourced by the scripts)
-│   ├── soc-cycle/                   #   the daily cycle: wrapper + prompt
-│   ├── ir-team/                     #   IR runner + team brief + 5 facets
-│   ├── self-improve/                #   worker prompt (+ legacy spawner for reference)
-│   └── soc-log-forwarder.py         #   optional: ship pihole/OpenClaw logs to SO
-├── security-onion/                  # optional SO-host helpers (clock resync, rule-update health)
-├── examples/                        # an example egress-baseline elastalert rule
-└── LICENSE
-```
+An existing Security Onion 2.4+ install, a Docker host that can reach it, an OpenClaw
+gateway, Claude Code with an Anthropic API key, and a Discord server with OpenClaw's bot
+in it. If you don't already run most of that stack, stop here; this is not a drop-in
+anything. It's the missing analyst for a specific kind of homelab, documented well enough
+that you can build the same one.
+
+One deliberate cost note: the headless runs want a cloud Claude model. I tried local
+models. A 30B coder model looped its tool calls until the loop detector shot it. The
+interactive Discord agent runs fine on a local 12B (mine does), but the tool-heavy
+analysis cycle earns its API bill.
 
 ## Install
 
-Configure once, then follow the docs in order:
-
 ```bash
 cp config/soc-suite.env.example config/soc-suite.env
-$EDITOR config/soc-suite.env        # fill in your network, SO, OpenClaw, and Discord values
+$EDITOR config/soc-suite.env        # your network, SO, OpenClaw, and Discord values
 
-bin/install.sh preflight            # verify reachability + prerequisites (read-only)
-bin/install.sh all                  # scaffold credential files, build + run the MCP
-                                    # containers, install the orchestration tree
+bin/install.sh preflight            # checks reachability, touches nothing
+bin/install.sh all                  # credential scaffolding, MCP containers, orchestration
 ```
 
-`bin/install.sh` automates the scriptable parts of docs 03/05 (it is idempotent —
-re-run it after fixing anything). Credentials, the SO-side setup (docs/02), the
-OpenClaw agent/bind/cron (docs/04), and the skill install (docs/08) stay manual.
+The installer covers the scriptable parts and is idempotent, so re-run it after you fix
+whatever the preflight yelled about. Credentials, the SO-side account and firewall grants
+(docs/02), the OpenClaw wiring (docs/04), and the skill install (docs/08) are manual, on
+purpose: those are the steps where you should know what you just did.
 
-1. **[Prerequisites](docs/01-prerequisites.md)** — what you need (SO, Docker, OpenClaw, a Claude
-   subscription, Discord, optional TI keys).
-2. **[Security Onion setup](docs/02-security-onion-setup.md)** — service account, opening SO's
-   internal-only ports (firewall hostgroups), API/ES access, the
-   optional SO-host helpers.
-3. **[MCP deployment](docs/03-mcp-deployment.md)** — the read-only Elastic bridge + this gateway.
-4. **[OpenClaw setup](docs/04-openclaw-setup.md)** — agent, Discord bind, MCP wiring, cron,
-   coding-agent.
-5. **[Autonomous cycle](docs/05-autonomous-cycle.md)** — install + schedule the daily triage.
-6. **[IR team](docs/06-ir-team.md)** · **[Self-improvement](docs/07-self-improvement.md)** — the
-   escalation paths.
-7. **[Skill install](docs/08-skill-install.md)** — install `soc-analyst` and fill in `environment.md`.
-8. **[Operator runbook](docs/09-operator-runbook.md)** · **[Security model](docs/10-security-model.md)**
-   — day-2 ops and the safety/threat model.
+Then work through the docs in order: [prerequisites](docs/01-prerequisites.md) →
+[Security Onion setup](docs/02-security-onion-setup.md) →
+[MCP deployment](docs/03-mcp-deployment.md) → [OpenClaw](docs/04-openclaw-setup.md) →
+[the cycle](docs/05-autonomous-cycle.md) → [IR team](docs/06-ir-team.md) →
+[self-improvement](docs/07-self-improvement.md) → [the skill](docs/08-skill-install.md) →
+[runbook](docs/09-operator-runbook.md) → [security model](docs/10-security-model.md).
 
-## Safety in one paragraph
+## The part you should actually read
 
-The cycle is **read-only by construction** (its tool allowlist has no write tool). Tuning is
-**operator-gated**: `propose_tuning` previews + issues a single-use token; you type `approve <token>`
-in Discord; only then does the agent apply the one write, which is **audited and reversible**. The IR
-team is read-only behind two human gates; the self-improvement worker is artifact-only and off by
-default. Telemetry is treated as **untrusted** (prompt-injection), and only external indicator values
-ever leave your network. The agent obeys binding monitoring tenets — no host is "trusted," the
-highest-privilege host gets the most scrutiny, and it never reports "clean," only detections bounded
-by named blind spots. See **[docs/10-security-model.md](docs/10-security-model.md)**.
+You are pointing an LLM at your security telemetry and giving it a path (a narrow,
+supervised path) to change your detection rules. Think about that for a second, then go
+read [docs/10-security-model.md](docs/10-security-model.md). The short version: the
+cycle's allowlist has no write tools; the only write path is a single-use token that you
+personally approve in Discord; everything applied is audited and reversible; all telemetry
+is treated as hostile input because alert fields are a prompt-injection delivery vehicle;
+and the only bytes that ever leave your network are external indicator values going to
+the TI providers you chose to turn on. Also: the agent will sometimes be wrong. It's a
+first-pass analyst, not an oracle. Read the report, not just the headline.
 
 ## Provenance
 
-Consolidated from a running home-lab deployment. The original scattered components
-(`mcp-so-gateway`, the `soc-agent` orchestration, the `soc-analyst` skill, and the SO-VM helpers)
-were gathered here, de-hardcoded into `config/soc-suite.env`, and documented for outside install.
-Licensed under [MIT](LICENSE).
+This ran for weeks as a pile of scripts scattered across a homelab config repo before it
+got a name. What's here is that pile, de-hardcoded into one env file and documented so
+somebody who isn't me can stand it up. MIT licensed. If you do something fun with it, I'd
+genuinely like to hear about it.

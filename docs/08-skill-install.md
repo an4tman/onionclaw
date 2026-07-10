@@ -1,15 +1,19 @@
-# Installing the `soc-analyst` skill
+# 08: Installing the `soc-analyst` skill
 
-The `soc-analyst` skill is the portable analyst *methodology* — the triage workflow, verdict
-taxonomy, query discipline, the tool contract (Elastic + `so_gateway` MCPs), and the safety rules.
-It carries **no** environment specifics; those live in a per-deployment `references/environment.md`
-you fill in. Install it into both Claude Code (for interactive triage) and OpenClaw (so the
-autonomous cycle and the `soc` agent can invoke it).
+The skill is the methodology: triage workflow, verdict taxonomy, query discipline, the
+tool contract, the safety rules. What it deliberately doesn't carry is knowledge of your
+network, because I can't ship you that. It lives in `references/environment.md`, which
+you write, and which is the single highest-leverage file in this whole repo. Install the
+skill into both Claude Code (interactive triage) and OpenClaw (so the cycle and the `soc`
+agent can invoke it).
 
 ## 1. Fill in your environment grounding
 
-This is the one required customization. The skill reads `references/environment.md` at the start of
-every triage; the shipped copy is a **template with placeholders**.
+If you skim every other page in these docs, fine, but do not skim this. The analyst is
+exactly as good as this file. It reads `references/environment.md` at the start of every
+triage, and everything it concludes (which alerts are noise, which host deserves a second
+look, what "weird" even means on your LAN) is derived from it. The shipped copy is a
+template with placeholders.
 
 ```bash
 cd skill/soc-analyst/references
@@ -19,19 +23,27 @@ $PAGER environment.example.md
 $EDITOR environment.md          # replace every <…>; delete the banner when done
 ```
 
-`environment.md` must tell the analyst, for **your** network:
+`environment.md` must tell the analyst, for your network:
 
-- the trusted **LAN CIDR**(s) and your sensor's `observer.name`;
-- a **host table** — each host's IP, role, and expected egress/behavior;
-- the **known-noisy-but-benign** signatures and traffic (so it doesn't escalate the expected);
-- the **highest-privilege host** — the box that earns the deepest scrutiny + a deviation check;
-- your **documented FP baselines** — each recurring benign pattern with the exact
-  parent-process/workdir/command shape that explains it, so suppression stays behavior-specific;
-- your **telemetry coverage** and, critically, your **named residual blind spots**.
+- the trusted LAN CIDR(s) and your sensor's `observer.name`;
+- a host table: each host's IP, role, and expected egress/behavior;
+- the known-noisy-but-benign signatures and traffic, so it doesn't escalate the expected;
+- the highest-privilege host: the box that earns the deepest scrutiny + a deviation check;
+- your documented FP baselines: each recurring benign pattern with the exact
+  parent-process/workdir/command shape that explains it, so suppression stays
+  behavior-specific;
+- your telemetry coverage and, critically, your named residual blind spots.
 
-Get this right before you trust any verdict — a wrong host table misclassifies your alerts. The
-`environment.example.md` file shows the depth expected; **do not ship someone else's host table as
-your grounding.**
+Get this right before you trust any verdict; a wrong host table misclassifies your
+alerts with total confidence. The `environment.example.md` file shows the depth expected.
+Don't ship someone else's host table as your grounding; it describes their network, and
+the analyst will happily judge yours by it.
+
+And keep it alive. Every time a triage teaches you something (a new host, a newly
+explained noisy pattern, a baseline that shifted), fold it back into this file. The
+analyst can't update its own grounding (the headless runs have no write tools, on
+purpose), so you're the write path. A stale host table is the number-one way this system
+degrades from "useful" to "confidently wrong".
 
 ## 2. Install into Claude Code
 
@@ -43,14 +55,15 @@ cp -r skill/soc-analyst ~/.claude/skills/soc-analyst
 claude  # then ask: "what does the soc-analyst skill do?"
 ```
 
-The skill expects the `elasticsearch` and `so_gateway` MCPs to be configured (user-scope is fine).
-If the MCP tools aren't loaded in a session, the skill instructs the agent to `ToolSearch` for them.
+The skill expects the `elasticsearch` and `so_gateway` MCPs to be configured (user-scope
+is fine). If the MCP tools aren't loaded in a session, the skill instructs the agent to
+`ToolSearch` for them.
 
 ## 3. Install into OpenClaw (managed skill)
 
-OpenClaw must carry the skill too, so the `soc` agent and the headless cycle can invoke it. Install
-it as an OpenClaw-**managed** global skill on the mounted config volume (so it survives a container
-recreate):
+OpenClaw must carry the skill too, so the `soc` agent and the headless cycle can invoke
+it. Install it as an OpenClaw-managed global skill on the mounted config volume, so it
+survives a container recreate:
 
 ```bash
 . config/soc-suite.env
@@ -61,16 +74,16 @@ docker exec "$SOC_OPENCLAW_CONTAINER" \
 docker exec "$SOC_OPENCLAW_CONTAINER" openclaw skills check 2>&1 | grep -i soc-analyst
 ```
 
-> Command names/paths are OpenClaw-version-specific — verify against your build's `openclaw skills`
-> help. The key point: it must be an OpenClaw-managed skill on the persistent config volume, not a
-> copy that a recreate wipes.
+> Command names/paths are OpenClaw-version-specific; verify against your build's
+> `openclaw skills` help. The key point: it must be an OpenClaw-managed skill on the
+> persistent config volume, not a copy that a recreate wipes.
 
 ## 4. Keep the copies in sync
 
-You now have the skill in (at least) two places — the Claude Code library and the OpenClaw-managed
-copy — plus this package's canonical source. When you update the methodology or your
-`environment.md`, re-sync both targets. Treat the package source as canonical and push the same
-content to each runtime.
+You now have the skill in (at least) two places, the Claude Code library and the
+OpenClaw-managed copy, plus this package's canonical source. When you update the
+methodology or your `environment.md`, re-sync both targets. Treat the package source as
+canonical and push the same content to each runtime.
 
 ## What's in the skill
 
