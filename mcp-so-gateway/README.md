@@ -36,6 +36,22 @@ Deployment walkthrough: [../docs/03-mcp-deployment.md](../docs/03-mcp-deployment
 | `list_groundings` | no | Applied grounding entries + undo handles |
 | `get_grounding` | no | The current environment.md content, verbatim, for any MCP client |
 
+### KB write tools (approval-based wiki changes; enabled by `KB_WRITE_ROOT`)
+
+| Tool | Writes? | Description |
+|------|---------|-------------|
+| `propose_kb_append` | no | Add one entry under an existing heading of an existing page; preview + single-use token |
+| `propose_kb_edit` | no | Replace one exact-unique occurrence of text; returns `double_gated: true` (second confirm) |
+| `apply_kb` | yes | Apply a proposed change; re-validates against the CURRENT page (a changed page fails loudly, re-propose) |
+| `revert_kb` | yes | Targeted undo (remove the appended block / restore the old text); later hand-edits survive |
+| `list_kb_changes` | no | Applied kb changes + undo handles |
+
+Same token gate as tunings and grounding, pointed at a whole markdown wiki: agents that
+read the wiki can propose corrections, and nothing lands without the operator's approval
+(edits require a second confirmation). Paths are confined to `KB_WRITE_ROOT`, only
+existing `.md` pages are writable, and proposed content may not introduce headings. Off
+unless `KB_WRITE_ROOT` is set.
+
 These power the operator's `learn <entity>: <what it is>` flow: the analyst's model of
 the network is a file the operator teaches, through the same token gate as tunings. The
 service can only append under known headings; it can't rewrite or delete existing
@@ -110,6 +126,7 @@ python -m so_gateway.server         # start the server locally (binds 0.0.0.0:80
 | `TI_FEED_TTL_SECONDS` | no | `21600` | Cache TTL for keyless feed snapshots (6h) |
 | `TI_HTTP_TIMEOUT` | no | `20` | Per-request HTTP timeout (seconds) |
 | `GROUNDING_PATHS` | no | | Colon-separated in-container paths to environment.md copies; enables the grounding tools. Mount the containing directory, not the bare file (atomic rename) |
+| `KB_WRITE_ROOT` | no | | In-container path of a writable markdown wiki; enables the kb write tools |
 
 Credentials live in two 0600 env files outside this tree: `so.env` (the three `SO_*`
 values) and `ti.env` (the keyed TI keys), both passed to the container as `--env-file`.

@@ -176,6 +176,15 @@ tokens like `amber-fox`, one Discord message per proposal):
 - `revert <handle>` → `revert_tuning`; `list tunings` → `list_tunings` (rows with a
   `revert <handle>` line); `list_pending_proposals` shows what still awaits approval
   (pending proposals are in-memory; a gateway restart clears them; re-propose).
+- KB corrections (needs `SOC_KB_WRITE_DIR` on the gateway; docs/08): when the agent
+  spots wiki text that live evidence contradicts, or the operator states a fact, it
+  drafts `propose_kb_append(path, heading, entry, rationale)` or
+  `propose_kb_edit(path, old_text, new_text, rationale)` (old_text must match the page
+  exactly once), shows the exact change plus token, and applies with `apply_kb` on
+  approval. Edits come back `double_gated: true`: after the approve, the agent asks one
+  explicit confirmation naming the page before applying. `list kb changes` →
+  `list_kb_changes`; unknown revert handles fall through `revert_tuning` →
+  `revert_grounding` → `revert_kb`.
 - `learn <entity>: <what it is>` → the grounding flow (needs `GROUNDING_PATHS` on the
   gateway; docs/08). The agent composes the narrowest environment.md entry from the
   operator's words (a host-table row, a known-noisy bullet, an FP-baseline block, or a
@@ -218,6 +227,11 @@ export ANTHROPIC_API_KEY="…your API key…"
 export CLAUDE_CONFIG_DIR="SOC_CLAUDE_CONFIG_DIR"
 export IS_SANDBOX=1
 ```
+
+Running fully local instead? Swap the key for an Anthropic-compatible endpoint
+(`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_DEFAULT_SONNET_MODEL`; ollama
+0.14+ speaks the protocol natively). Read the capability caveats in
+[01-prerequisites §4](01-prerequisites.md) first; they're earned.
 
 > Credential handling: keep `SOC_CLAUDE_ENV` mode `0600` and out of git (encrypt at rest
 > if your setup supports it). It is the one real secret in this layer.

@@ -18,6 +18,7 @@ design goal, anyway. The `soc` agent handles the commands.
 | `dismiss <id>` | Decline an escalation candidate. No investigation. |
 | `learn <entity>: <what it is>` | Teach the analyst your network. The agent drafts the `environment.md` entry from your words, shows it with a token, and writes it only when you approve. Answers the briefing's `GROUNDING GAP` lines. |
 | `list groundings` | List applied grounding entries and their undo handles. |
+| (agent proposes a kb change) | With `SOC_KB_WRITE_DIR` set, the agent can propose wiki corrections when evidence contradicts a page, or when you state a fact. Appends apply on your `approve <token>`. Edits ask twice: your approve, then an explicit confirm naming the page. `list kb changes` shows what's applied. |
 | "show the grounding" | The agent calls `get_grounding` and shows the current environment.md, so you can check what the analyst believes about your network. |
 
 Notes:

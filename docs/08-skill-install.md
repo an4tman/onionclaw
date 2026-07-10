@@ -69,6 +69,13 @@ exactly this with its kb gateway; one physical file, one gated write path, disco
 everywhere. (Gotcha: the nested mountpoint directory must already exist inside the kb
 source on the host, because Docker can't mkdir inside a read-only bind.)
 
+The same gate extends to the wiki itself. Set `SOC_KB_WRITE_DIR` to your wiki's directory
+and the gateway grows `propose_kb_append` / `propose_kb_edit` / `apply_kb` / `revert_kb`:
+agents that read your wiki can propose corrections when live evidence contradicts a page,
+and nothing lands without your approval — edits (which replace text rather than add it)
+ask twice. It's the same design conviction as the grounding flow: knowledge the agents
+run on should be teachable through a gate, never self-editing.
+
 ## 2. Install into Claude Code
 
 Claude Code loads skills from its skills directory. Copy the skill in (or symlink it):

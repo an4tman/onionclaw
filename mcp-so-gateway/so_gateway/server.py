@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from . import ti
 from .config import load_config
 from .grounding import GroundingService, GroundingStore
+from .kb_write import KbWriteService, KbWriteStore
 from .so_client import SoClient
 from .tuning_service import TuningService
 from .tuning_store import TuningStore
@@ -19,11 +20,16 @@ _AUDIT_DB_PATH = os.environ.get("SO_AUDIT_DB", "/data/tuning-audit.sqlite")
 # in-container paths. Empty = the grounding tools report "not configured".
 _GROUNDING_PATHS = [p for p in os.environ.get("GROUNDING_PATHS", "").split(":") if p]
 
+# Writable kb root (the wiki dir, mounted read-write). Empty = the kb write
+# tools report "not configured".
+_KB_WRITE_ROOT = os.environ.get("KB_WRITE_ROOT", "")
+
 mcp = FastMCP("so-gateway", host=_MCP_HOST, port=_MCP_PORT)
 
 _client: SoClient | None = None
 _tuning_service: TuningService | None = None
 _grounding_service: GroundingService | None = None
+_kb_write_service: KbWriteService | None = None
 
 
 def _get_client() -> SoClient:
@@ -47,6 +53,15 @@ def _get_grounding_service() -> GroundingService:
             _GROUNDING_PATHS, GroundingStore(_AUDIT_DB_PATH)
         )
     return _grounding_service
+
+
+def _get_kb_write_service() -> KbWriteService:
+    global _kb_write_service
+    if _kb_write_service is None:
+        _kb_write_service = KbWriteService(
+            _KB_WRITE_ROOT or None, KbWriteStore(_AUDIT_DB_PATH)
+        )
+    return _kb_write_service
 
 
 def ping() -> str:
@@ -190,7 +205,11 @@ def list_pending_proposals() -> list:
     tunings = [
         {**p, "kind": "tuning"} for p in _get_tuning_service().list_pending()
     ]
-    return tunings + _get_grounding_service().list_pending()
+    return (
+        tunings
+        + _get_grounding_service().list_pending()
+        + _get_kb_write_service().list_pending()
+    )
 
 
 def disposition_alerts(
@@ -284,6 +303,69 @@ def list_groundings() -> list:
     return _get_grounding_service().list_groundings()
 
 
+# ---------------------------------------------------------------------------
+# KB WRITE tools -- gated writes to the kb wiki, generalized from grounding.
+#
+# Any agent that reads the kb may PROPOSE a change; nothing lands without the
+# operator's approval. Appends add one entry under an existing heading; edits
+# replace one exact occurrence and are DOUBLE-GATED (the workflow demands a
+# second confirm). apply_kb re-validates against the current page, so a page
+# that changed after the propose fails loudly instead of clobbering.
+# ---------------------------------------------------------------------------
+
+
+def propose_kb_append(path: str, heading: str, entry: str, rationale: str) -> dict:
+    """Propose appending ONE entry under a heading of an existing kb page. NO WRITE.
+
+    *path*: kb-relative page path (e.g. ``kb/security/so-user-management.md``).
+    *heading*: text of an existing heading on that page (unique substring,
+        case-insensitive).
+    *entry*: the markdown to append (bullets/paragraphs; no headings).
+    *rationale*: one line on what taught us this.
+
+    Returns ``{token, kind, path, heading, entry, insert_at_line,
+    double_gated, rationale}``. The operator approves, then ``apply_kb(token)``.
+    """
+    return _get_kb_write_service().propose_kb_append(
+        path=path, heading=heading, entry=entry, rationale=rationale
+    )
+
+
+def propose_kb_edit(path: str, old_text: str, new_text: str, rationale: str) -> dict:
+    """Propose replacing ONE exact occurrence of text on a kb page. NO WRITE.
+
+    Use this to FIX stale or wrong kb text (an append can only add alongside).
+    *old_text* must match exactly once on the page -- include enough
+    surrounding context to make it unique. Returns ``double_gated: true``:
+    show the operator the exact old -> new diff and require a second
+    confirmation before ``apply_kb``. If the page changes between propose and
+    apply, apply fails and you re-propose against the current text.
+    """
+    return _get_kb_write_service().propose_kb_edit(
+        path=path, old_text=old_text, new_text=new_text, rationale=rationale
+    )
+
+
+def apply_kb(token: str) -> dict:
+    """Apply a proposed kb change. WRITES the kb page. Single-use token.
+
+    Requires operator approval first (and a second confirm for edits).
+    Re-validates against the current page content; returns ``{handle, status,
+    kind, path}``. The ``handle`` reverts the change.
+    """
+    return _get_kb_write_service().apply_kb(token)
+
+
+def revert_kb(handle: str) -> dict:
+    """Undo a previously applied kb change (targeted; later hand-edits survive)."""
+    return _get_kb_write_service().revert_kb(handle)
+
+
+def list_kb_changes() -> list:
+    """List applied kb changes + their undo handles (excludes reverted)."""
+    return _get_kb_write_service().list_kb_changes()
+
+
 def get_grounding() -> dict:
     """Return the current grounding (environment.md) content. READ-ONLY.
 
@@ -368,6 +450,11 @@ mcp.tool()(apply_grounding)
 mcp.tool()(revert_grounding)
 mcp.tool()(list_groundings)
 mcp.tool()(get_grounding)
+mcp.tool()(propose_kb_append)
+mcp.tool()(propose_kb_edit)
+mcp.tool()(apply_kb)
+mcp.tool()(revert_kb)
+mcp.tool()(list_kb_changes)
 mcp.tool()(enrich_iocs)
 mcp.tool()(ti_provider_status)
 mcp.tool()(extract_iocs)

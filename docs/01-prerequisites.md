@@ -19,7 +19,7 @@ Configurable values are referenced by their `SOC_*` names throughout. Those live
 | 1 | Security Onion 2.4+ (reachable, ES + Core API) | Required | `SOC_SO_*` |
 | 2 | A Docker host for the two MCP containers | Required | `SOC_DOCKER_HOST`, `SOC_ES_MCP_PORT`, `SOC_SO_GATEWAY_PORT` |
 | 3 | OpenClaw (self-hosted assistant gateway) | Required | `SOC_OPENCLAW_CONTAINER`, `SOC_AGENT_HOME` |
-| 4 | Claude Code + an Anthropic API key | Required | `SOC_CLAUDE_*`, `SOC_CLOUD_MODEL` |
+| 4 | Claude Code + a model backend (Anthropic API key, or a local Anthropic-compatible endpoint) | Required | `SOC_CLAUDE_*`, `SOC_CLOUD_MODEL` |
 | 5 | A Discord server + OpenClaw's bot + a SOC channel | Required | `SOC_DISCORD_CHANNEL` |
 | 6 | Threat-intel API keys (OTX / AbuseIPDB / VirusTotal) | Optional | (in the gateway's `ti.env`) |
 | 7 | The `soc-analyst` skill installed | Required | |
@@ -94,25 +94,49 @@ Discord bot, and the `coding-agent` capability that spawns headless Claude Code.
       team. The in-container install paths are `SOC_AGENT_HOME`, `SOC_CLAUDE_BIN`,
       `SOC_CLAUDE_ENV`, and `SOC_CLAUDE_CONFIG_DIR`.
 
-## 4. Claude Code + an Anthropic API key
+## 4. Claude Code + a model backend
 
 The autonomous cycle and the IR team run as headless Claude Code (`claude -p`) inside the
-OpenClaw container, authenticated with an Anthropic API key.
+OpenClaw container. Claude Code needs a backend, and there are two ways to give it one:
+
+**Mode A: an Anthropic API key (recommended).** Cloud Claude drives the analysis.
 
 - [ ] Claude Code installed inside the OpenClaw container (reachable at `SOC_CLAUDE_BIN`).
-- [ ] An Anthropic API key available to the container via a `claude.env` file
-      (`SOC_CLAUDE_ENV`), sourced by the container at startup, with an isolated config dir
-      (`SOC_CLAUDE_CONFIG_DIR`). Keep this file tightly permissioned (`0600`, encrypted at
-      rest if you can).
+- [ ] An Anthropic API key in a `claude.env` file (`SOC_CLAUDE_ENV`), sourced by the
+      container at startup, with an isolated config dir (`SOC_CLAUDE_CONFIG_DIR`). Keep
+      this file tightly permissioned (`0600`, encrypted at rest if you can).
 - [ ] `SOC_CLOUD_MODEL` set to a cloud Claude model (e.g. `anthropic/claude-sonnet-5`).
 - [ ] If the OpenClaw container runs as root, set `IS_SANDBOX=1` so Claude Code's
       `--permission-mode bypassPermissions` is permitted.
 
-> Why cloud Claude for the headless runs, and not a local model? The cycle is tool-heavy:
-> it has to drive ES queries, playbook lookups, and the gateway reliably, dozens of calls
-> per run. Local models tried in the source deployment looped on tool calls and never
-> completed a cycle (a 30B coder model was the worst offender). The interactive `soc`
-> agent is a different story; see [04-openclaw-setup](04-openclaw-setup.md).
+**Mode B: a local Anthropic-compatible endpoint (experimental).** Since ollama 0.14
+(January 2026), ollama natively speaks the Anthropic Messages API, so Claude Code can run
+against a local model with no Anthropic account at all. The `claude.env` becomes:
+
+```bash
+export ANTHROPIC_BASE_URL="http://<ollama-host>:11434"
+export ANTHROPIC_AUTH_TOKEN="ollama"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="<your-local-model>"   # the tier the cycle asks for
+export CLAUDE_CONFIG_DIR="..."   # unchanged
+export IS_SANDBOX=1              # unchanged
+```
+
+Everything else in the suite works identically: same allowlists, same user-scoped MCPs,
+same prompts, because it's still Claude Code. (Interactively, `ollama launch` on 0.14.5+
+automates the same wiring.)
+
+Now the caveats, and take them seriously. The reason this suite defaults to cloud Claude
+was never licensing; it was capability. The cycle is a dozens-of-tool-calls analyst run
+inside Claude Code's heavy harness. On the source deployment a 30B coder model looped its
+tool calls and never finished a cycle, and a local 12B looped a single exec call badly
+enough to kill three days of runs. If you go local: use the strongest tool-calling model
+you can serve, give it at least a 32K context window (16K overflows the assembled prompt;
+more is better), expect briefings that need more skepticism, and verify the whole
+propose-token flow end to end before trusting a verdict. Mode B removes the Anthropic
+dependency; it does not repeal the capability requirement.
+
+> The interactive `soc` agent is a separate, easier decision; see
+> [04-openclaw-setup](04-openclaw-setup.md) §3.
 
 ## 5. A Discord server + bot
 
@@ -159,8 +183,8 @@ methodology, and the query cookbook.
 - It assumes you run this stack (OpenClaw + Claude Code + Discord + Docker) in front of an
   existing Security Onion. If you do not run this combination, this suite is not a drop-in
   fit.
-- It does not install or manage Security Onion, OpenClaw, Docker, or Claude Code. Those
-  are your prerequisites.
+- It does not install or manage Security Onion, OpenClaw, Docker, Claude Code, or your
+  model backend. Those are your prerequisites.
 - You must work through the dependency steps (the rest of these docs) in order; later docs
   assume each item above is already satisfied.
 

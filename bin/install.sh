@@ -162,6 +162,11 @@ EOF
     set -- "$@" -v "$SOC_GROUNDING_DIR:/grounding" \
       -e "GROUNDING_PATHS=/grounding/environment.md"
   fi
+  # Optional kb write path (docs/08): mount a wiki/notes dir read-write so the
+  # gated propose/apply/revert_kb tools can change it with operator approval.
+  if [ -n "${SOC_KB_WRITE_DIR:-}" ]; then
+    set -- "$@" -v "$SOC_KB_WRITE_DIR:/kb-rw" -e "KB_WRITE_ROOT=/kb-rw"
+  fi
   "$@" -p "$SOC_SO_GATEWAY_PORT:8080" mcp-so-gateway:latest >/dev/null
 
   say "  (re)creating mcp-elasticsearch on :$SOC_ES_MCP_PORT (image: $ES_MCP_IMAGE) ..."
