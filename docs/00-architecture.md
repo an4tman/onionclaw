@@ -52,8 +52,11 @@ so. This page is the map; the numbered docs are the build order.
   table, what each box is supposed to do, documented FP baselines, named blind spots) at
   the start of every run. Feed it a wrong or stale host table and you get confident
   nonsense with query citations. The methodology ships in the skill; the judgment comes
-  from what you teach it about your network. See [08-skill-install](08-skill-install.md),
-  and treat that file as a living document, not a form you fill in once.
+  from what you teach it about your network. And teaching it is interactive: when a
+  briefing flags a `GROUNDING GAP` (a host or pattern the file doesn't explain), you
+  answer in Discord with `learn <entity>: <what it is>`, the agent drafts the entry, and
+  it lands in the file through the same propose/approve/revert gate as tunings. See
+  [08-skill-install](08-skill-install.md).
 - **The headless runs are Claude Code, not the OpenClaw agent.** The cycle and the IR team run
   as `claude -p` inside the OpenClaw container, authenticated with their own credentials
   (an Anthropic API key in `claude.env`), separate from whatever model OpenClaw's agents use.

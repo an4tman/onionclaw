@@ -83,6 +83,17 @@ a mismatch at propose time):
 
 At most a couple of proposals per cycle, for the clearest FPs.
 
+## Grounding gaps (the learn loop)
+
+When the cycle meets something the grounding file does not explain (an internal host
+missing from the host table, a recurring pattern with no documented baseline, a service
+that appears to have moved), do NOT guess and do NOT silently adapt. Surface it in §2 as a
+line beginning `GROUNDING GAP — ` naming the entity and the observed evidence, and end the
+line with: `reply: learn <entity>: <what it is>`. The operator's reply drives the gated
+grounding write path (the interactive agent drafts the environment.md entry and the
+operator approves it); the grounding file is the operator's to teach, never yours to
+invent. Do not call any grounding write tool from this cycle.
+
 ## Telemetry coverage (state current coverage each cycle)
 
 State which coverage actually applied this cycle, from the telemetry-coverage section of
@@ -117,7 +128,8 @@ class with zero volume, write "none detected in window."
 actually applied. Distinguish "nothing happened" from "outside what we can see," naming
 any residual blind spot that bounds a conclusion. Include one line on signature-update
 health from the `so-rule-update-health` doc (e.g. "Signatures current: 66k rules, last
-updated 16h ago", or the failure if `status` is not `ok`).
+updated 16h ago", or the failure if `status` is not `ok`). Emit any `GROUNDING GAP — `
+lines here (see the learn loop above).
 
 `### 3. Recommendation`: exactly one security-posture improvement or capability
 expansion, with a safety note (read-only scope, risk, review horizon). Prefer something

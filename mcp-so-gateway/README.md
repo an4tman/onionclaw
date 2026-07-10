@@ -26,6 +26,21 @@ Deployment walkthrough: [../docs/03-mcp-deployment.md](../docs/03-mcp-deployment
 | `list_tunings` | no | List currently applied tunings + undo handles |
 | `disposition_alerts` | yes | Acknowledge (close) / escalate alerts for a rule (`POST /api/events/ack`); audited |
 
+### Grounding tools (approval-based writes to environment.md; enabled by `GROUNDING_PATHS`)
+
+| Tool | Writes? | Description |
+|------|---------|-------------|
+| `propose_grounding` | no | Validate + preview an environment.md entry (host_table / known_noisy / fp_baselines / coverage), issue a single-use token |
+| `apply_grounding` | yes | Append the proposed entry under its section heading in every configured grounding file (atomic; multi-file rollback); records an undo |
+| `revert_grounding` | yes | Remove exactly the inserted block (later hand-edits survive) |
+| `list_groundings` | no | Applied grounding entries + undo handles |
+
+These power the operator's `learn <entity>: <what it is>` flow: the analyst's model of
+the network is a file the operator teaches, through the same token gate as tunings. The
+service can only append under known headings; it can't rewrite or delete existing
+grounding, and heading-bearing entries are rejected so an injected entry can't hijack the
+file's structure. Off unless `GROUNDING_PATHS` is set.
+
 ### Threat-intel enrichment tools (read-only)
 
 | Tool | Description |
@@ -93,6 +108,7 @@ python -m so_gateway.server         # start the server locally (binds 0.0.0.0:80
 | `TI_TTL_SECONDS` | no | `21600` | Cache TTL for keyed-provider records (6h) |
 | `TI_FEED_TTL_SECONDS` | no | `21600` | Cache TTL for keyless feed snapshots (6h) |
 | `TI_HTTP_TIMEOUT` | no | `20` | Per-request HTTP timeout (seconds) |
+| `GROUNDING_PATHS` | no | | Colon-separated in-container paths to environment.md copies; enables the grounding tools. Mount the containing directory, not the bare file (atomic rename) |
 
 Credentials live in two 0600 env files outside this tree: `so.env` (the three `SO_*`
 values) and `ti.env` (the keyed TI keys), both passed to the container as `--env-file`.

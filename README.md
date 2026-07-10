@@ -35,11 +35,13 @@ behave. There is no tool to misbehave with.
 - `skill/soc-analyst/`: the triage methodology as a skill. Workflow, verdict taxonomy,
   query discipline, the safety rules. You feed it an `environment.md` describing your
   network, because an analyst who doesn't know what's normal on your LAN is just a
-  random-verdict generator.
+  random-verdict generator. And you keep feeding it: when a briefing flags something the
+  file doesn't explain, you reply `learn <entity>: <what it is>` and the entry lands in
+  the file through the same approval gate as tunings.
 - `mcp-so-gateway/`: an MCP server for SO's Core API. Reads detections and playbooks,
-  holds the only SO write credential, does the propose/approve/revert tuning dance, and
-  enriches IOCs (OTX, AbuseIPDB, VirusTotal, plus the keyless feeds). Tested; run
-  `uv run pytest` and see.
+  holds the only SO write credential, does the propose/approve/revert token dance for
+  both tunings and grounding entries, and enriches IOCs (OTX, AbuseIPDB, VirusTotal,
+  plus the keyless feeds). Tested; run `uv run pytest` and see.
 - `orchestration/soc-cycle/`: the daily triage run. One wrapper script, one prompt, one
   briefing in your Discord.
 - `orchestration/ir-team/`: the deep-dive team. Five roles, read-only, converges to one

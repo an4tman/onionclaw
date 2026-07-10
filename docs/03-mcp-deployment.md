@@ -127,6 +127,7 @@ DB from defaults or the run command):
 | `TI_TTL_SECONDS` | no | `21600` | Cache TTL for keyed-provider records (6h) |
 | `TI_FEED_TTL_SECONDS` | no | `21600` | Cache TTL for keyless feed snapshots (6h) |
 | `TI_HTTP_TIMEOUT` | no | `20` | Per-request HTTP timeout (seconds) |
+| `GROUNDING_PATHS` | no | | Colon-separated in-container paths to environment.md copies; enables the gated grounding write tools (see docs/08) |
 
 ### 3.4 Run the container
 
@@ -154,6 +155,13 @@ Why the `-v …/data:/data` volume: the tuning audit/undo DB (`SO_AUDIT_DB`, def
 `/data/ti-cache.sqlite`) persist there, surviving container recreates. Every applied write
 is recorded in the audit DB with the exact prior state, which is what makes
 `revert_tuning` possible.
+
+Optional grounding mount: to enable the learn flow (docs/08), set `SOC_GROUNDING_DIR` in
+`soc-suite.env` to the host directory holding your canonical `environment.md` (the
+installer then adds `-v $SOC_GROUNDING_DIR:/grounding -e
+GROUNDING_PATHS=/grounding/environment.md` to this run command). Mount the directory, not
+the bare file; the gateway writes atomically via rename, which breaks on a single-file
+bind mount.
 
 ## 4. Threat-intel providers
 

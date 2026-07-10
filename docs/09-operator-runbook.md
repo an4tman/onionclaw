@@ -16,6 +16,8 @@ design goal, anyway. The `soc` agent handles the commands.
 | `list tunings` | List currently applied tunings and their undo handles. |
 | `investigate <id>` | Launch the read-only IR team on an escalation candidate (gate 1). Posts a converged incident record. |
 | `dismiss <id>` | Decline an escalation candidate. No investigation. |
+| `learn <entity>: <what it is>` | Teach the analyst your network. The agent drafts the `environment.md` entry from your words, shows it with a token, and writes it only when you approve. Answers the briefing's `GROUNDING GAP` lines. |
+| `list groundings` | List applied grounding entries and their undo handles. |
 
 Notes:
 - Tokens and handles are short word pairs (e.g. `amber-fox`): easy to retype on a phone,
@@ -26,6 +28,9 @@ Notes:
   the agent: "list pending") shows what's still open.
 - `disable`/`modify` proposals get a second confirmation step before applying, because
   they're broader than a `suppress`.
+- Grounding entries ride the same token flow as tunings and are just as revertible; the
+  audit DB keeps the prior file contents. A revert removes exactly the inserted block, so
+  hand-edits you made afterwards survive.
 - Reaction approval depends on your OpenClaw build delivering Discord reaction events
   (`reactionNotifications`, default `"own"`). Test it: react to any bot message and ask
   the agent what it saw. On builds without it (2026.6.5), typed approval is the path;
@@ -89,9 +94,10 @@ reset on restart.
   narrower scope. The agent's supposed to know better, but the gate is only as good as
   the human at it.
 - Feed the grounding. When a briefing teaches you something about your own network (a
-  new device, a newly explained noisy pattern, a service that moved), put it in
-  `environment.md`. That file is the analyst's entire mental model of your LAN, it can't
-  update it itself, and stale grounding is the main source of misclassification. Five
-  minutes of editing after a surprising briefing pays for itself for months.
+  new device, a newly explained noisy pattern, a service that moved), teach it back:
+  reply `learn <entity>: <what it is>` and approve the drafted entry, or edit
+  `environment.md` by hand. That file is the analyst's entire mental model of your LAN
+  and stale grounding is the main source of misclassification. The briefing's
+  `GROUNDING GAP` lines are it asking you to do exactly this.
 
 Next: [10-security-model](10-security-model.md).

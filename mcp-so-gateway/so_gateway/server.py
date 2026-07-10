@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import ti
 from .config import load_config
+from .grounding import GroundingService, GroundingStore
 from .so_client import SoClient
 from .tuning_service import TuningService
 from .tuning_store import TuningStore
@@ -14,10 +15,15 @@ _MCP_PORT = int(os.environ.get("MCP_PORT", "8080"))
 # Audit/undo DB. Lives on a mounted volume so it survives a container recreate.
 _AUDIT_DB_PATH = os.environ.get("SO_AUDIT_DB", "/data/tuning-audit.sqlite")
 
+# Grounding files (the skill's environment.md copies), colon-separated
+# in-container paths. Empty = the grounding tools report "not configured".
+_GROUNDING_PATHS = [p for p in os.environ.get("GROUNDING_PATHS", "").split(":") if p]
+
 mcp = FastMCP("so-gateway", host=_MCP_HOST, port=_MCP_PORT)
 
 _client: SoClient | None = None
 _tuning_service: TuningService | None = None
+_grounding_service: GroundingService | None = None
 
 
 def _get_client() -> SoClient:
@@ -32,6 +38,15 @@ def _get_tuning_service() -> TuningService:
     if _tuning_service is None:
         _tuning_service = TuningService(_get_client(), TuningStore(_AUDIT_DB_PATH))
     return _tuning_service
+
+
+def _get_grounding_service() -> GroundingService:
+    global _grounding_service
+    if _grounding_service is None:
+        _grounding_service = GroundingService(
+            _GROUNDING_PATHS, GroundingStore(_AUDIT_DB_PATH)
+        )
+    return _grounding_service
 
 
 def ping() -> str:
@@ -165,11 +180,17 @@ def list_tunings() -> list:
 def list_pending_proposals() -> list:
     """List proposals awaiting operator approval (token + summary). Read-only.
 
-    Use this to resolve a bare "approve" (exactly one pending proposal means
-    that's the one) or to re-show outstanding proposals. Pending proposals are
-    in-memory: a gateway restart clears them (re-propose).
+    Covers BOTH kinds of pending proposal -- tunings (apply with
+    ``apply_tuning``) and grounding entries (apply with ``apply_grounding``);
+    each row's ``kind`` says which apply to call. Use this to resolve a bare
+    "approve" (exactly one pending proposal means that's the one) or to
+    re-show outstanding proposals. Pending proposals are in-memory: a gateway
+    restart clears them (re-propose).
     """
-    return _get_tuning_service().list_pending()
+    tunings = [
+        {**p, "kind": "tuning"} for p in _get_tuning_service().list_pending()
+    ]
+    return tunings + _get_grounding_service().list_pending()
 
 
 def disposition_alerts(
@@ -194,6 +215,73 @@ def disposition_alerts(
         acknowledge=acknowledge,
         escalate=escalate,
     )
+
+
+# ---------------------------------------------------------------------------
+# GROUNDING tools -- the environment.md write path, gated like tunings.
+#
+# The analyst's model of the network is the skill's environment.md. These
+# tools let the operator TEACH the system interactively (Discord `learn ...`)
+# without ever letting an agent silently edit its own grounding: propose is
+# read-only and returns a token; apply appends ONE entry under a known section
+# heading in every configured copy, audited + revertible. The service can only
+# append -- it cannot rewrite or delete existing grounding.
+# ---------------------------------------------------------------------------
+
+
+def propose_grounding(section: str, entry: str, rationale: str) -> dict:
+    """Validate + preview a grounding entry and issue a single-use token. NO WRITE.
+
+    *section*: where the entry belongs in environment.md --
+        ``host_table``   -> one markdown table row: ``| `<ip>` | <name>: <role;
+                            what egress/behavior is expected> |``
+        ``known_noisy``  -> a bullet describing an expected-benign signature or
+                            traffic pattern (and why it's expected).
+        ``fp_baselines`` -> a narrow behavior-specific baseline block: host,
+                            rule(s), the exact parent/workdir/command shape,
+                            and the deviation check.
+        ``coverage``     -> a bullet about telemetry coverage or a named blind
+                            spot.
+    *entry*: the exact markdown to append. Compose it from what the OPERATOR
+        said (they're the source of truth about their own network); show them
+        this text before asking for approval.
+    *rationale*: one line on what taught us this (recorded in the audit log).
+
+    Returns ``{token, section, entry, rationale, files, double_gated}`` where
+    ``files`` previews the insertion point in every configured grounding copy.
+    Read-only; to actually write, a human approves and ``apply_grounding(token)``
+    is called.
+    """
+    return _get_grounding_service().propose_grounding(
+        section=section, entry=entry, rationale=rationale
+    )
+
+
+def apply_grounding(token: str) -> dict:
+    """Apply a proposed grounding entry. WRITES environment.md. Single-use token.
+
+    *token*: the one-time token from ``propose_grounding``. Requires operator
+    approval BEFORE this is called. Appends the entry under the section heading
+    in every configured grounding file (atomic per file; partial failures roll
+    back), records the prior contents, and returns ``{handle, status, section,
+    entry, files}``. The ``handle`` reverts the change.
+    """
+    return _get_grounding_service().apply_grounding(token)
+
+
+def revert_grounding(handle: str) -> dict:
+    """Remove a previously applied grounding entry from the grounding files.
+
+    *handle*: the undo handle from ``apply_grounding`` (or ``list_groundings``).
+    Targeted: removes exactly the inserted block, so grounding edits made after
+    the apply survive. Errors if the block was already hand-edited away.
+    """
+    return _get_grounding_service().revert_grounding(handle)
+
+
+def list_groundings() -> list:
+    """List applied grounding entries + their undo handles (excludes reverted)."""
+    return _get_grounding_service().list_groundings()
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +351,10 @@ mcp.tool()(revert_tuning)
 mcp.tool()(list_tunings)
 mcp.tool()(list_pending_proposals)
 mcp.tool()(disposition_alerts)
+mcp.tool()(propose_grounding)
+mcp.tool()(apply_grounding)
+mcp.tool()(revert_grounding)
+mcp.tool()(list_groundings)
 mcp.tool()(enrich_iocs)
 mcp.tool()(ti_provider_status)
 mcp.tool()(extract_iocs)

@@ -151,12 +151,18 @@ EOF
 
   say "  (re)creating mcp-so-gateway on :$SOC_SO_GATEWAY_PORT ..."
   docker rm -f mcp-so-gateway >/dev/null 2>&1 || true
-  docker run -d --name mcp-so-gateway --restart unless-stopped \
+  set -- docker run -d --name mcp-so-gateway --restart unless-stopped \
     --add-host "$SOC_SO_HOSTNAME:$SOC_SO_IP" \
     --env-file "$GATEWAY_DIR/so.env" \
     --env-file "$GATEWAY_DIR/ti.env" \
-    -v "$GATEWAY_DIR/data:/data" \
-    -p "$SOC_SO_GATEWAY_PORT:8080" mcp-so-gateway:latest >/dev/null
+    -v "$GATEWAY_DIR/data:/data"
+  # Optional grounding write path (docs/08): mount the directory holding the
+  # canonical environment.md so the gated grounding tools can append to it.
+  if [ -n "${SOC_GROUNDING_DIR:-}" ]; then
+    set -- "$@" -v "$SOC_GROUNDING_DIR:/grounding" \
+      -e "GROUNDING_PATHS=/grounding/environment.md"
+  fi
+  "$@" -p "$SOC_SO_GATEWAY_PORT:8080" mcp-so-gateway:latest >/dev/null
 
   say "  (re)creating mcp-elasticsearch on :$SOC_ES_MCP_PORT (image: $ES_MCP_IMAGE) ..."
   docker rm -f mcp-elasticsearch >/dev/null 2>&1 || true

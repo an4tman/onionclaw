@@ -40,10 +40,25 @@ Don't ship someone else's host table as your grounding; it describes their netwo
 the analyst will happily judge yours by it.
 
 And keep it alive. Every time a triage teaches you something (a new host, a newly
-explained noisy pattern, a baseline that shifted), fold it back into this file. The
-analyst can't update its own grounding (the headless runs have no write tools, on
-purpose), so you're the write path. A stale host table is the number-one way this system
-degrades from "useful" to "confidently wrong".
+explained noisy pattern, a baseline that shifted), fold it back into this file. A stale
+host table is the number-one way this system degrades from "useful" to "confidently
+wrong".
+
+There are two ways to feed it. The manual one: edit the file. The good one: the learn
+flow. Set `SOC_GROUNDING_DIR` in `soc-suite.env` to the directory holding your canonical
+copy (say, the OpenClaw-managed one) and re-run `bin/install.sh gateways`; the gateway
+then exposes `propose_grounding` / `apply_grounding` / `revert_grounding`, gated exactly
+like tunings. When a briefing flags a `GROUNDING GAP` (a host or pattern the file doesn't
+explain), you reply `learn <entity>: <what it is>` in Discord; the agent composes the
+narrowest entry from your words, shows you the exact text with a token, and writes it
+only on your `approve`. Appends only, audited, revertible. The cycle itself still can't
+touch it: even `propose_grounding` is off the cycle's allowlist, because the analyst
+inventing facts about your network is precisely what this design forbids. You stay the
+source of truth; you just get to teach from your phone.
+
+One wrinkle if you installed the skill into two runtimes: the gateway writes the copies
+it can reach (`GROUNDING_PATHS` takes multiple colon-separated paths if both are on the
+Docker host). A Claude Code copy on another machine still needs the manual re-sync below.
 
 ## 2. Install into Claude Code
 

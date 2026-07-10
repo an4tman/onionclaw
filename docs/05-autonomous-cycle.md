@@ -23,8 +23,11 @@ The wrapper runs `claude -p` with an explicit `--allowedTools` allowlist: the re
 `elasticsearch` MCP, the read `so_gateway` tools, `propose_tuning` (itself read-only: it
 validates, previews blast radius, and returns a single-use token without writing), plus
 local `Read/Grep/Glob/Skill`. The `so_gateway` write tools (`apply_tuning`,
-`revert_tuning`, `disposition_alerts`) are deliberately not in the list, so the cycle has
-no way to apply a tuning. Applying is a separate step that waits for your approval (see
+`revert_tuning`, `disposition_alerts`, `apply_grounding`, `revert_grounding`) are
+deliberately not in the list, so the cycle has no way to apply a tuning or touch its own
+grounding. Even `propose_grounding` is left off: the cycle surfaces grounding gaps for
+you to answer (`GROUNDING GAP` lines in the briefing); it never drafts network facts
+itself. Applying is a separate step that waits for your approval (see
 [09-operator-runbook](09-operator-runbook.md)).
 
 > The wrapper enumerates the read-only `so_gateway` tools by name rather than a
