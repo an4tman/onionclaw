@@ -1,3 +1,5 @@
+<p align="center"><img width="188" height="261" alt="onionclaw" src="https://github.com/user-attachments/assets/d5b55a8a-714f-4423-ad74-d22e21b03a60" /></p>
+
 # OnionClaw
 
 > **Read this first.** Hobby project. Alpha. Unsupported. It came out of one homelab and
